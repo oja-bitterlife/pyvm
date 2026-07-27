@@ -1,12 +1,26 @@
+# メモリ
 VM = [0] * 256
 
+# 4つの汎用レジスタを定義
 REG_R0 = 0  # アキュムレータ
 REG_R1 = 1  # ２項演算用
 REG_R2 = 2  # ループカウンタ
 REG_R3 = 3  # 一時的な値
 
+# 追加のレジスタを定義
 REG_EVENT = 4
 REG_SELECT_NO = 5
 
-EVENT_KEY_CANCEL = 0x10
-EVENT_KEY_ENTER = 0x11
+# 以下自由に
+REG_FREE = 16
+
+# システム固定イベントコード
+EVENT_KEY = 0x10
+EVENT_KEY_START = EVENT_KEY | 1
+EVENT_KEY_SELECT = EVENT_KEY | 2
+EVENT_KEY_A = EVENT_KEY | 3
+EVENT_KEY_B = EVENT_KEY | 4
+EVENT_KEY_LEFT = EVENT_KEY | 5
+EVENT_KEY_RIGHT = EVENT_KEY | 6
+EVENT_KEY_UP = EVENT_KEY | 7
+EVENT_KEY_DOWN = EVENT_KEY | 8

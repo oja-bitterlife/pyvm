@@ -1,7 +1,7 @@
 from vm import *
 
 def main():
-    if VM[REG_EVENT] == EVENT_KEY_ENTER:
+    if VM[REG_EVENT] == EVENT_KEY_A or VM[REG_EVENT] == EVENT_KEY_START:
         match VM[REG_SELECT_NO]:
             case 0:
                 return 0  # START

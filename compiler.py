@@ -1,6 +1,5 @@
 from assets.vm import *
 import ast
-import base64
 
 # 例：超簡易8bit VMのオペコード定義
 OP_HALT      = 0x00
@@ -275,6 +274,44 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code.append(OP_MOD)
         else:
             raise NotImplementedError(f"Unsupported binary operator: {type(node.op)}")
+
+    def visit_BoolOp(self, node):
+        # 左辺を評価
+        self.code.append(OP_LDC)
+        self.visit(node.values[0])
+        self.code.append(OP_ST)
+        self.code.append(0x03)  # R3に保存
+        
+        for value in node.values[1:]:
+            self.code.append(OP_LD)
+            self.code.append(0x03)  # R3からR0にロード
+
+            if isinstance(node.op, ast.And):
+                # ANDの場合、左辺が偽なら右辺を評価せずに偽を返す
+                self.code.append(OP_JZ)
+                jump_fixup_pos = len(self.code)
+                self.code.append(0xff)  # 仮のオフセット
+                
+                self.visit(value)
+                
+                target_pos = len(self.code)
+                self.code[jump_fixup_pos] = min(0xff, target_pos)
+            elif isinstance(node.op, ast.Or):
+                # ORの場合、左辺が真なら右辺を評価せずに真を返す
+                self.code.append(OP_JNZ)
+                jump_fixup_pos = len(self.code)
+                self.code.append(0xff)  # 仮のオフセット
+                
+                self.visit(value)
+                
+                target_pos = len(self.code)
+                self.code[jump_fixup_pos] = min(0xff, target_pos)
+            else:
+                raise NotImplementedError(f"Unsupported boolean operator: {type(node.op)}")
+
+            # 右辺(R0)をR3に保存して次の比較に備える
+            self.code.append(OP_ST)
+            self.code.append(0x03)  # R3に保存
 
 # 使用例
 with open("assets/test.py", "r") as f:
