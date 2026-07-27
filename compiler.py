@@ -4,8 +4,8 @@ import base64
 
 # 例：超簡易8bit VMのオペコード定義
 OP_HALT      = 0x00
-OP_LD        = 0x01  # Load from memory
-OP_ST        = 0x02  # Store to memory
+OP_LD        = 0x01  # Load (R0) from memory
+OP_ST        = 0x02  # Store (R0) to memory
 OP_LDC       = 0x03  # Load (R0) Constant
 OP_JMP       = 0x10  # Jump
 OP_JZ        = 0x11  # Jump if Zero (R0 == 0)
