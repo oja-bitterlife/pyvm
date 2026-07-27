@@ -2,7 +2,7 @@
 // https://docs.swift.org/swift-book
 
 @main
-struct swift {
+struct swiftVM {
     static func main() {
         print("Hello, world!")
     }

@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:pyvm}/swiftVM",
+            "name": "Debug swiftVM (swiftVM)",
+            "target": "swiftVM",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug swiftVM (swiftVM)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:pyvm}/swiftVM",
+            "name": "Release swiftVM (swiftVM)",
+            "target": "swiftVM",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release swiftVM (swiftVM)"
+        }
+    ]
+}

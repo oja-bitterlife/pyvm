@@ -1,5 +1,5 @@
 import Testing
-@testable import swift
+@testable import swiftVM
 
 @Test func example() async throws {
     // Write your test here and use APIs like `#expect(...)` to check expected conditions.
