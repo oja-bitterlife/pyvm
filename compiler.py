@@ -11,8 +11,9 @@ OP_JMP       = 0x10
 OP_JZ        = 0x11
 OP_JNZ        = 0x12
 OP_CMP       = 0x20
-OP_ADD       = 0x30
-OP_SUB       = 0x31
+OP_NOT      = 0x30  # R0 = R0 != 0 ? 1 : 0
+OP_ADD       = 0x31
+OP_SUB       = 0x32
 
 class BytecodeCompiler(ast.NodeVisitor):
     def __init__(self):
@@ -34,24 +35,6 @@ class BytecodeCompiler(ast.NodeVisitor):
             for stmt in node.body:
                 self.visit(stmt)
 
-    def visit_If(self, node):
-        # 1. 条件式を評価するコードを生成
-        self.visit(node.test)
-        
-        # 2. 条件が偽の場合のジャンプ命令 (仮のジャンプ先を空けておく)
-        self.code.append(OP_JZ)
-        jump_fixup_pos = len(self.code)
-        self.code.append(0xff)  # 仮のオフセット
-
-        # 3. ifブロック内の処理をコンパイル
-        for stmt in node.body:
-            self.visit(stmt)
-            
-        # 4. ジャンプ先（ブロックの終端）のオフセットを計算してパッチを当てる
-        # （ここでは8bitの相対ジャンプや絶対アドレスとして書き戻す）
-        target_pos = len(self.code)
-        self.code[jump_fixup_pos] = min(0xff, target_pos)
-
     def visit_Constant(self, node):
         self.code.append(int(node.value) & 0xff)  # 8bitに収める
 
@@ -62,19 +45,50 @@ class BytecodeCompiler(ast.NodeVisitor):
         else:
             raise NameError(f"Name '{node.id}' is not defined in compiler context.")
 
+    # VM[]の中身を取得する
     def visit_Subscript(self, node):
+        # VM[]以外を却下する
+        if not isinstance(node.value, ast.Name) or node.value.id != 'VM':
+            raise NotImplementedError("Only VM[] subscript is supported.")
+
         self.code.append(OP_LD)
         self.visit(node.slice)
 
-    def visit_Compare(self, node):
-        # 左辺を評価 (スタックに積まれる)
-        self.visit(node.left)
+    def visit_If(self, node):
+        # 条件式を評価するコードを生成
+        self.visit(node.test)
         
-        # 右辺を評価 (スタックに積まれる)
-        # ※通常は1つの演算子を想定
-        for op, right in zip(node.ops, node.comparators):
-            self.visit(right)
+        # 条件が偽の場合のジャンプ命令 (仮のジャンプ先を空けておく)
+        self.code.append(OP_JZ)
+        jump_fixup_pos = len(self.code)
+        self.code.append(0xff)  # 仮のオフセット
+
+        # ifブロック内の処理をコンパイル
+        for stmt in node.body:
+            self.visit(stmt)
             
+        # ジャンプ先（ブロックの終端）のオフセットを計算して代入
+        target_pos = len(self.code)
+        self.code[jump_fixup_pos] = min(0xff, target_pos)
+
+    def visit_Compare(self, node):
+        # 左辺を評価
+        self.code.append(OP_LDC)
+        self.visit(node.left)
+        self.code.append(OP_ST)
+        self.code.append(0x03)  # R3に保存
+        
+        for op, right in zip(node.ops, node.comparators):
+            # 右辺を評価
+            self.code.append(OP_LDC)
+            self.visit(right)
+            self.code.append(OP_ST)
+            self.code.append(0x01)  # R1に保存
+
+            # 比較する値を引っ張ってくる
+            self.code.append(OP_LD)
+            self.code.append(0x03)  # R3からR0にロード
+
             # 演算子の種類に応じたサブコードを決定
             if isinstance(op, ast.Eq):
                 cmp_subcode = 0x00  # CMP_EQ
@@ -96,9 +110,18 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code.append(OP_CMP)
             self.code.append(cmp_subcode)
 
+            # 右辺(R1)をR3に保存して次の比較に備える
+            self.code.append(OP_LD)
+            self.code.append(0x01)  # R1からR0にロード
+            self.code.append(OP_ST)
+            self.code.append(0x03)  # R3に保存
+
     def visit_Match(self, node):
-        # 1. match の対象（subject）を評価してスタックに積む
+        # match の対象（subject）を評価
+        self.code.append(OP_LDC)
         self.visit(node.subject)
+        self.code.append(OP_ST)
+        self.code.append(0x01)  # R1に保存
         
         # match 全体を抜けた後のジャンプ先アドレスを保持するリスト
         exit_jump_patches = []
@@ -108,22 +131,22 @@ class BytecodeCompiler(ast.NodeVisitor):
             
             # ワイルドカード（case _:) の場合
             if isinstance(pattern, ast.MatchAs) and pattern.name is None:
-                # 無条件でここに入る（デフォルトケース）
+                # デフォルトケースの処理
                 for stmt in case.body:
                     self.visit(stmt)
-                continue
+                break  # デフォルトケースは最後に置くべきなので、ここでループを抜ける
                 
             # 通常の値マッチングの場合 (例: case 0:, case 1:)
             if isinstance(pattern, ast.MatchValue):
-                # パターンの値を評価してスタックに積む
+                # パターンの値を評価
+                self.code.append(OP_LDC)
                 self.visit(pattern.value)
                 
-                # スタック上の2つの値を比較する命令を出力
-                self.code.append(OP_CMP)
-                self.code.append(0x00)  # CMP_EQ
+                # R1に保存されたmatchの対象と比較
+                self.code.append(OP_CMP)  # R0 == R1
                 
-                # 条件が偽の場合のジャンプ命令 (仮のジャンプ先を空けておく)
-                self.code.append(OP_JMP_FALSE)
+                # 条件が偽の場合
+                self.code.append(OP_JZ)
                 jump_fixup_pos = len(self.code)
                 self.code.append(0xff)  # 仮のオフセット
                 
@@ -148,7 +171,7 @@ class BytecodeCompiler(ast.NodeVisitor):
 
     def visit_BinOp(self, node):
         self.visit(node.left)
-        self.visit(node.right)
+        self.visit(node.left)
         if isinstance(node.op, ast.Add):
             self.code.append(OP_ADD)
         elif isinstance(node.op, ast.Sub):
