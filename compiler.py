@@ -13,7 +13,7 @@ OP_CMP       = 0x20  # R0とR1を比較してR0に 0 or 1 で結果を格納。�
 OP_NOT       = 0x30  # R0 = R0 != 0 ? 1 : 0
 OP_ADD       = 0x31  # R0 = R0 + R1
 OP_SUB       = 0x32  # R0 = R0 - R1
-OP_MUL       = 0x33  # R1R0 = R0 * R1
+OP_MUL       = 0x33  # R0 = R0 * R1
 OP_DIV       = 0x34  # R0 = R0 / R1
 OP_MOD       = 0x35  # R0 = R0 % R1
 
