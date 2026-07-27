@@ -223,14 +223,6 @@ class BytecodeCompiler(ast.NodeVisitor):
         target_pos = len(self.code)
         self.code[exit_jump_pos] = min(0xff, target_pos)
 
-    def visit_BinOp(self, node):
-        self.visit(node.left)
-        if isinstance(node.op, ast.Add):
-            self.code.append(OP_ADD)
-        elif isinstance(node.op, ast.Sub):
-            self.code.append(OP_SUB)
-
-
     def visit_UnaryOp(self, node):
         # マイナスの単項演算子
         if isinstance(node.op, ast.USub):
@@ -260,6 +252,29 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code.append(OP_NOT)
         else:
             raise NotImplementedError(f"Unsupported unary operator: {type(node.op)}")
+
+    # 二項演算の処理
+    def visit_BinOp(self, node):
+        self.code.append(OP_LDC)
+        self.visit(node.right)
+        self.code.append(OP_ST)
+        self.code.append(0x01)  # R1 = right operand
+
+        self.code.append(OP_LDC)
+        self.visit(node.left)
+
+        if isinstance(node.op, ast.Add):
+            self.code.append(OP_ADD)
+        elif isinstance(node.op, ast.Sub):
+            self.code.append(OP_SUB)
+        elif isinstance(node.op, ast.Mult):
+            self.code.append(OP_MUL)
+        elif isinstance(node.op, ast.Div):
+            self.code.append(OP_DIV)
+        elif isinstance(node.op, ast.Mod):
+            self.code.append(OP_MOD)
+        else:
+            raise NotImplementedError(f"Unsupported binary operator: {type(node.op)}")
 
 # 使用例
 with open("assets/test.py", "r") as f:
