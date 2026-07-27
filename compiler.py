@@ -4,14 +4,15 @@ import base64
 
 # 例：超簡易8bit VMのオペコード定義
 OP_HALT      = 0x00
-OP_PUSH_CONST= 0x01
-OP_LOAD_VAR  = 0x02
-OP_STORE_VAR = 0x03
-OP_ADD       = 0x10
-OP_SUB       = 0x11
-OP_JMP_FALSE = 0x20
-OP_JMP       = 0x21
-OP_CMP       = 0x30
+OP_LD       = 0x01  # Load from memory
+OP_ST       = 0x02  # Store to memory
+OP_LDC       = 0x03  # Load (R0) Constant
+OP_JMP       = 0x10
+OP_JZ        = 0x11
+OP_JNZ        = 0x12
+OP_CMP       = 0x20
+OP_ADD       = 0x30
+OP_SUB       = 0x31
 
 class BytecodeCompiler(ast.NodeVisitor):
     def __init__(self):
@@ -38,7 +39,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.visit(node.test)
         
         # 2. 条件が偽の場合のジャンプ命令 (仮のジャンプ先を空けておく)
-        self.code.append(OP_JMP_FALSE)
+        self.code.append(OP_JZ)
         jump_fixup_pos = len(self.code)
         self.code.append(0xff)  # 仮のオフセット
 
@@ -52,22 +53,18 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.code[jump_fixup_pos] = min(0xff, target_pos)
 
     def visit_Constant(self, node):
-        self.code.append(OP_PUSH_CONST)
-        self.code.append(node.value)
+        self.code.append(int(node.value) & 0xff)  # 8bitに収める
 
     def visit_Name(self, node):
         val = globals().get(node.id)
         if val is not None:
-            self.code.append(OP_PUSH_CONST)
-            self.code.append(int(val) & 0xFF)
+            self.code.append(int(val) & 0xff)  # 8bitに収める
         else:
             raise NameError(f"Name '{node.id}' is not defined in compiler context.")
 
     def visit_Subscript(self, node):
-        # 例: VM[REG_EVENT] の中身（REG_EVENTの部分 = node.slice）を評価してスタックに積む
+        self.code.append(OP_LD)
         self.visit(node.slice)
-        # そのアドレスから値をロードする命令を積む
-        self.code.append(OP_LOAD_VAR)
 
     def visit_Compare(self, node):
         # 左辺を評価 (スタックに積まれる)
@@ -99,6 +96,55 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code.append(OP_CMP)
             self.code.append(cmp_subcode)
 
+    def visit_Match(self, node):
+        # 1. match の対象（subject）を評価してスタックに積む
+        self.visit(node.subject)
+        
+        # match 全体を抜けた後のジャンプ先アドレスを保持するリスト
+        exit_jump_patches = []
+        
+        for case in node.cases:
+            pattern = case.pattern
+            
+            # ワイルドカード（case _:) の場合
+            if isinstance(pattern, ast.MatchAs) and pattern.name is None:
+                # 無条件でここに入る（デフォルトケース）
+                for stmt in case.body:
+                    self.visit(stmt)
+                continue
+                
+            # 通常の値マッチングの場合 (例: case 0:, case 1:)
+            if isinstance(pattern, ast.MatchValue):
+                # パターンの値を評価してスタックに積む
+                self.visit(pattern.value)
+                
+                # スタック上の2つの値を比較する命令を出力
+                self.code.append(OP_CMP)
+                self.code.append(0x00)  # CMP_EQ
+                
+                # 条件が偽の場合のジャンプ命令 (仮のジャンプ先を空けておく)
+                self.code.append(OP_JMP_FALSE)
+                jump_fixup_pos = len(self.code)
+                self.code.append(0xff)  # 仮のオフセット
+                
+                # caseブロック内の処理をコンパイル
+                for stmt in case.body:
+                    self.visit(stmt)
+                
+                # caseブロックを抜けた後のジャンプ命令 (仮のジャンプ先を空けておく)
+                self.code.append(OP_JMP)
+                exit_jump_pos = len(self.code)
+                self.code.append(0xff)  # 仮のオフセット
+                exit_jump_patches.append(exit_jump_pos)
+                
+                # ジャンプ先（caseブロックの終端）のオフセットを計算してパッチを当てる
+                target_pos = len(self.code)
+                self.code[jump_fixup_pos] = min(0xff, target_pos)
+
+        # match全体を抜けた後のジャンプ命令のパッチを当てる
+        for exit_jump_pos in exit_jump_patches:
+            self.code[exit_jump_pos] = min(0xff, len(self.code))
+
 
     def visit_BinOp(self, node):
         self.visit(node.left)
@@ -107,8 +153,6 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code.append(OP_ADD)
         elif isinstance(node.op, ast.Sub):
             self.code.append(OP_SUB)
-
-    # 必要に応じて if, for, Assign などを追加していく...
 
 # 使用例
 with open("assets/test.py", "r") as f:
