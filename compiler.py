@@ -45,6 +45,15 @@ class BytecodeCompiler(ast.NodeVisitor):
             for stmt in node.body:
                 self.visit(stmt)
 
+    def visit_Return(self, node):
+        self.code.append(OP_LDC)
+        if node.value is not None:
+            self.visit(node.value)
+        else:
+            self.code.append(0)  # Noneの場合は0を返す
+        self.code.append(OP_HALT)  # Return時にVMを停止させる
+
+
     def visit_Constant(self, node):
         self.code.append(int(node.value) & 0xff)  # 8bitに収める
 
@@ -216,19 +225,41 @@ class BytecodeCompiler(ast.NodeVisitor):
 
     def visit_BinOp(self, node):
         self.visit(node.left)
-        self.visit(node.left)
         if isinstance(node.op, ast.Add):
             self.code.append(OP_ADD)
         elif isinstance(node.op, ast.Sub):
             self.code.append(OP_SUB)
 
-    def visit_Return(self, node):
-        self.code.append(OP_LDC)
-        if node.value is not None:
-            self.visit(node.value)
+
+    def visit_UnaryOp(self, node):
+        # マイナスの単項演算子
+        if isinstance(node.op, ast.USub):
+            # 定数のマイナス
+            if isinstance(node.operand, ast.Constant):
+                val = int(node.operand.value)
+                self.code.append((-val) & 0xff)
+            # 0から引くことでマイナスを表現する
+            else:
+                # オペランド（変数など）を評価してR1に入れる
+                self.code.append(OP_LDC)
+                self.visit(node.operand)
+                self.code.append(OP_ST)
+                self.code.append(0x01)  # R1 = operand
+
+                # 0 から operand (R1) を引く
+                self.code.append(OP_LDC)
+                self.code.append(0)
+                self.code.append(OP_SUB) # R0 = R0 - R1
+
+        elif isinstance(node.op, ast.UAdd):
+            # プラス (+) の処理（中身をそのまま評価するだけでOK）
+            self.visit(node.operand)
+        elif isinstance(node.op, ast.Not):
+            # 否定 (not) の処理（OP_NOT 命令を使うなど）
+            self.visit(node.operand)
+            self.code.append(OP_NOT)
         else:
-            self.code.append(0)  # Noneの場合は0を返す
-        self.code.append(OP_HALT)  # Return時にVMを停止させる
+            raise NotImplementedError(f"Unsupported unary operator: {type(node.op)}")
 
 # 使用例
 with open("assets/test.py", "r") as f:
