@@ -282,6 +282,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.code.append(OP_ST)
         self.code.append(0x03)  # R3に保存
         
+        # ループで回すのでチェックは左辺だけでOK。右辺は次のループで左辺になる
         for value in node.values[1:]:
             self.code.append(OP_LD)
             self.code.append(0x03)  # R3からR0にロード
@@ -292,6 +293,7 @@ class BytecodeCompiler(ast.NodeVisitor):
                 jump_fixup_pos = len(self.code)
                 self.code.append(0xff)  # 仮のオフセット
                 
+                self.code.append(OP_LDC)
                 self.visit(value)
                 
                 target_pos = len(self.code)
@@ -302,6 +304,7 @@ class BytecodeCompiler(ast.NodeVisitor):
                 jump_fixup_pos = len(self.code)
                 self.code.append(0xff)  # 仮のオフセット
                 
+                self.code.append(OP_LDC)
                 self.visit(value)
                 
                 target_pos = len(self.code)
