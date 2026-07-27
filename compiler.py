@@ -4,22 +4,32 @@ import base64
 
 # 例：超簡易8bit VMのオペコード定義
 OP_HALT      = 0x00
-OP_LD       = 0x01  # Load from memory
-OP_ST       = 0x02  # Store to memory
+OP_LD        = 0x01  # Load from memory
+OP_ST        = 0x02  # Store to memory
 OP_LDC       = 0x03  # Load (R0) Constant
-OP_JMP       = 0x10
-OP_JZ        = 0x11
-OP_JNZ        = 0x12
-OP_CMP       = 0x20
-OP_NOT      = 0x30  # R0 = R0 != 0 ? 1 : 0
-OP_ADD       = 0x31
-OP_SUB       = 0x32
+OP_JMP       = 0x10  # Jump
+OP_JZ        = 0x11  # Jump if Zero (R0 == 0)
+OP_JNZ       = 0x12  # Jump if Not Zero (R0 != 0)
+OP_CMP       = 0x20  # R0とR1を比較してR0に 0 or 1 で結果を格納。比較演算はSubコードで指定する。
+OP_NOT       = 0x30  # R0 = R0 != 0 ? 1 : 0
+OP_ADD       = 0x31  # R0 = R0 + R1
+OP_SUB       = 0x32  # R0 = R0 - R1
+OP_MUL       = 0x33  # R1R0 = R0 * R1
+OP_DIV       = 0x34  # R0 = R0 / R1
+OP_MOD       = 0x35  # R0 = R0 % R1
 
 class BytecodeCompiler(ast.NodeVisitor):
     def __init__(self):
         self.code = bytearray()
         self.has_main = False
 
+    # 未実装
+    def generic_visit(self, node):
+        if self.has_main:
+            raise NotImplementedError(f"Unsupported AST node: {type(node).__name__}")
+        super().generic_visit(node)
+
+    # mainから始める
     def visit_FunctionDef(self, node):
         print(f"Compiling function: {node.name}")
 
@@ -168,6 +178,41 @@ class BytecodeCompiler(ast.NodeVisitor):
         for exit_jump_pos in exit_jump_patches:
             self.code[exit_jump_pos] = min(0xff, len(self.code))
 
+    def visit_For(self, node):
+        # range(N) の N が定数の場合のみ対応する場合
+        if isinstance(node.iter, ast.Call) and len(node.iter.args) == 1:
+            stop_val = node.iter.args[0].value  # 例: 3
+            
+            for i in range(stop_val):
+                # ループの中身をそのまま愚直に吐き出す！
+                for stmt in node.body:
+                    self.visit(stmt)
+        else:
+            raise NotImplementedError("Only simple constant range() is supported.")
+
+    def visit_While(self, node):
+        # 1. ループの先頭位置を記録
+        loop_start = len(self.code)
+        
+        # 2. 条件式を評価 (結果が R0 に入る想定)
+        self.visit(node.test)
+        
+        # 3. 条件が偽 (0) ならループを抜けるジャンプ
+        self.code.append(OP_JZ)
+        exit_jump_pos = len(self.code)
+        self.code.append(0xff)  # 仮のアドレス
+        
+        # 4. ループ本体のコードを生成
+        for stmt in node.body:
+            self.visit(stmt)
+            
+        # 5. ループの先頭へ無条件ジャンプ
+        self.code.append(OP_JMP)
+        self.code.append(loop_start)
+        
+        # 6. 脱出先アドレスをバックパッチ
+        target_pos = len(self.code)
+        self.code[exit_jump_pos] = min(0xff, target_pos)
 
     def visit_BinOp(self, node):
         self.visit(node.left)
@@ -176,6 +221,14 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code.append(OP_ADD)
         elif isinstance(node.op, ast.Sub):
             self.code.append(OP_SUB)
+
+    def visit_Return(self, node):
+        self.code.append(OP_LDC)
+        if node.value is not None:
+            self.visit(node.value)
+        else:
+            self.code.append(0)  # Noneの場合は0を返す
+        self.code.append(OP_HALT)  # Return時にVMを停止させる
 
 # 使用例
 with open("assets/test.py", "r") as f:
