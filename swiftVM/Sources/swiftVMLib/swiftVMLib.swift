@@ -67,8 +67,8 @@ public struct swiftVMLib {
             LD()
         case OP_ST:
             ST()
-        case OP_STI:
-            STI()
+        case OP_STA:
+            STA()
         case OP_JMP:
             assert(
                 self.pc == self.code[self.pc],
@@ -126,8 +126,8 @@ public struct swiftVMLib {
         self.mem[Int(addr)] = self.mem[0]
         print("VM[\(addr)] = VM[0]")
     }
-    public mutating func STI() {
-        // STI命令の実装
+    public mutating func STA() {
+        // STA命令の実装
         let index = Int(self.code[self.pc])
         self.pc += 1
         let addr = self.mem[index]  // R1に格納されたアドレスを取得
