@@ -196,6 +196,7 @@ class BytecodeCompiler(ast.NodeVisitor):
                 
                 # R1に保存されたmatchの対象と比較
                 self.code.append(OP_CMP)  # R0 == R1
+                self.code.append(CMP_EQ)  # サブコードで等価比較を指定
                 
                 # 条件が偽の場合
                 self.code.append(OP_JZ)
