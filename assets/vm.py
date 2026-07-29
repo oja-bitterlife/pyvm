@@ -6,23 +6,12 @@ VM = [0] * 256
 # エラー終了時のアドレス
 ADDR_ERROR = 0xFF
 
-# メモリ定義
-# *********************************************************
-# 4つの汎用レジスタを定義
-VM_R0 = 0  # アキュムレータ
-VM_R1 = 1  # ２項演算用
-VM_R2 = 2  # ループカウンタ
-VM_R3 = 3  # 一時的な値
-VM_SP = 4  # スタックポインタ
-VM_STACK = 14  # スタック(最高10段)
-
 # 追加の専用レジスタを定義
-VM_SYSTEM_DEF = 16
-VM_EVENT = VM_SYSTEM_DEF+1
-VM_SELECT_NO = VM_SYSTEM_DEF+2
+VM_EVENT = 1
+VM_SELECT_NO = 2
 
 # 以下自由に
-VM_FREE = 32
+VM_FREE = 16
 
 
 # イベント定義

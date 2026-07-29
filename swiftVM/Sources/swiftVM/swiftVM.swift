@@ -21,14 +21,10 @@ struct swiftVM {
             return
         }
 
-        var vm = rawMem.withUnsafeMutableBufferPointer { memBuf in
-            return rawCode.withUnsafeBufferPointer { codeBuf in
-                let memAddr = UInt(UInt(bitPattern: memBuf.baseAddress))
-                let codeAddr = UInt(UInt(bitPattern: codeBuf.baseAddress))
-
-                return swiftVMLib(codeAddress: codeAddr, memAddress: memAddr)
-            }
-        }
+        let memAddr = UInt(
+            UInt(bitPattern: rawMem.withUnsafeMutableBufferPointer { $0.baseAddress }))
+        let codeAddr = UInt(UInt(bitPattern: rawCode.withUnsafeBufferPointer { $0.baseAddress }))
+        var vm = swiftVMLib(codeAddress: codeAddr, memAddress: memAddr, memSize: rawMem.count)
 
         while true {
             let shouldHalt = vm.step()

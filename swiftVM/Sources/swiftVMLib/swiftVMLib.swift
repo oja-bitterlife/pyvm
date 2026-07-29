@@ -20,60 +20,68 @@ public struct swiftVMLib {
     // MARK: - ワーク用メモリ（RAM領域）
     public struct WorkMemory {
         private let ptr: UnsafeMutablePointer<UInt16>
+        private let size: Int
 
-        fileprivate init(address: UInt) {
+        fileprivate init(address: UInt, size: Int) {
             self.ptr = UnsafeMutablePointer<UInt16>(bitPattern: address)!
-            ptr[ADDR_SP] = UInt16(ADDR_STACK)  // スタックポインタの初期化
+            self.size = size
         }
 
         public subscript(index: Int) -> UInt16 {
             get {
-                assert(index >= 0 && index < 256, "Memory index out of range")
+                assert(index >= 0 && index < self.size, "Memory index out of range")
                 return ptr[index]
             }
             set {
-                assert(index >= 0 && index < 256, "Memory index out of range")
+                assert(index >= 0 && index < self.size, "Memory index out of range")
                 ptr[index] = newValue
             }
         }
+    }
+
+    // MARK: - スタック操作
+    public struct StackMemory {
+        var sp = 0  // スタックポインタ（スタックのトップを指す）
+        var ptr = [UInt16](repeating: 0, count: 128)  // スタック領域（固定長配列）
 
         public mutating func push(value: UInt16) {
-            let sp = Int(ptr[ADDR_SP])
-            assert(sp > ADDR_SP, "Stack underflow")
-            ptr[sp] = value
-            ptr[ADDR_SP] = UInt16(sp - 1)
+            assert(self.sp < self.ptr.count, "Stack overflow")
+            self.ptr[self.sp] = value
+            self.sp += 1
+        }
+        public mutating func pop() -> UInt16 {
+            assert(self.sp > 0, "Stack underflow")
+            self.sp -= 1
+            return self.ptr[self.sp]
         }
 
-        public mutating func pop() -> UInt16 {
-            let sp = Int(ptr[ADDR_SP])
-            assert(sp <= ADDR_STACK, "Stack overflow")
-            let value = ptr[sp + 1]
-            ptr[ADDR_SP] = UInt16(sp + 1)
-            return value
+        public func peek() -> UInt16 {
+            assert(self.sp > 0, "Stack is empty")
+            return self.ptr[self.sp - 1]
         }
     }
 
     // MARK: - VM本体のプロパティ
     public let code: CodeMemory
     public var mem: WorkMemory
+    public var stack: StackMemory
 
     // MARK: - 初期化
-    public init(codeAddress: UInt, memAddress: UInt) {
+    public init(codeAddress: UInt, memAddress: UInt, memSize: Int) {
         self.code = CodeMemory(address: codeAddress)
-        self.mem = WorkMemory(address: memAddress)
+        self.mem = WorkMemory(address: memAddress, size: memSize)
+        self.stack = StackMemory()
     }
 
     public func result() -> Int {
-        // メモリ[0] やスタックトップなど、仕様に合わせて調整（例として mem[0] を返す）
-        return Int(self.mem[0])
+        return Int(self.stack.peek())
     }
 
     public func getPC() -> Int {
-        return self.pc
+        return Int(self.pc)
     }
 
     public mutating func step() -> Bool {
-        print("PC:\(self.pc)", terminator: " - ")
         let op = Int(self.code[self.pc])
         self.pc += 1
 
@@ -95,8 +103,6 @@ public struct swiftVMLib {
             JNZ()
         case OP_CMP:
             CMP()
-        case OP_NOT:
-            NOT()
         case OP_ADD:
             ADD()
         case OP_SUB:
@@ -132,46 +138,41 @@ public struct swiftVMLib {
         let value = UInt16(upper) << 8 | UInt16(lower)
 
         // 定数を評価スタックにプッシュ
-        self.mem.push(value: value)
-        print("LDC pushed \(value)")
+        self.stack.push(value: value)
     }
 
     public mutating func LD() {
         // スタックトップからメモリアドレスを取り出し、その番地の値をロードして再びプッシュ
-        let addr = self.mem.pop()
+        let addr = self.stack.pop()
         let value = self.mem[Int(addr)]
-        self.mem.push(value: value)
-        print("LD: loaded VM[\(addr)] = \(value) to stack")
+        self.stack.push(value: value)
     }
 
     public mutating func ST() {
         // スタックから [アドレス, 値] の順でポップしてメモリにストア
         // ※コンパイラの生成順序（値 -> アドレス の順で積む想定）に合わせてポップ
-        let addr = self.mem.pop()
-        let value = self.mem.pop()
+        let addr = self.stack.pop()
+        let value = self.stack.pop()
         self.mem[Int(addr)] = value
-        print("ST: VM[\(addr)] = \(value)")
     }
 
     public mutating func JZ() {
         let addr = self.code[self.pc]
         self.pc += 1
         // 条件値はスタックからポップして判定
-        let cond = self.mem.pop()
+        let cond = self.stack.pop()
         if cond == 0 {
             self.pc = Int(addr)
         }
-        print("JZ: condition == 0, jumping to \(addr)")
     }
 
     public mutating func JNZ() {
         let addr = self.code[self.pc]
         self.pc += 1
-        let cond = self.mem.pop()
+        let cond = self.stack.pop()
         if cond != 0 {
             self.pc = Int(addr)
         }
-        print("JNZ: condition != 0, jumping to \(addr)")
     }
 
     public mutating func CMP() {
@@ -179,8 +180,8 @@ public struct swiftVMLib {
         self.pc += 1
 
         // スタックから右辺、左辺の順にポップする（LIFOなので後から積んだ右辺が先に出る）
-        let right = self.mem.pop()
-        let left = self.mem.pop()
+        let right = self.stack.pop()
+        let left = self.stack.pop()
 
         let result: UInt16
         switch subcode {
@@ -196,80 +197,70 @@ public struct swiftVMLib {
         }
 
         // 比較結果をスタックにプッシュ
-        self.mem.push(value: result)
-        print("CMP result \(result) pushed to stack")
+        self.stack.push(value: result)
     }
 
     public mutating func NOT() {
-        let val = self.mem.pop()
+        let val = self.stack.pop()
         let result: UInt16 = (val != 0) ? 0 : 1
-        self.mem.push(value: result)
-        print("NOT: !\(val) = \(result)")
+        self.stack.push(value: result)
     }
 
     public mutating func ADD() {
-        let right = self.mem.pop()
-        let left = self.mem.pop()
+        let right = self.stack.pop()
+        let left = self.stack.pop()
         let result = left &+ right
-        self.mem.push(value: result)
-        print("ADD: \(left) + \(right) = \(result)")
+        self.stack.push(value: result)
     }
 
     public mutating func SUB() {
-        let right = self.mem.pop()
-        let left = self.mem.pop()
+        let right = self.stack.pop()
+        let left = self.stack.pop()
         let result = left &- right
-        self.mem.push(value: result)
-        print("SUB: \(left) - \(right) = \(result)")
+        self.stack.push(value: result)
     }
 
     public mutating func MUL() {
-        let right = self.mem.pop()
-        let left = self.mem.pop()
+        let right = self.stack.pop()
+        let left = self.stack.pop()
         let result = left &* right
-        self.mem.push(value: result)
-        print("MUL: \(left) * \(right) = \(result)")
+        self.stack.push(value: result)
     }
 
     public mutating func DIV() {
-        let right = self.mem.pop()
-        let left = self.mem.pop()
+        let right = self.stack.pop()
+        let left = self.stack.pop()
         assert(right != 0, "Division by zero")
         let result = left / right
-        self.mem.push(value: result)
-        print("DIV: \(left) / \(right) = \(result)")
+        self.stack.push(value: result)
     }
 
     public mutating func MOD() {
-        let right = self.mem.pop()
-        let left = self.mem.pop()
+        let right = self.stack.pop()
+        let left = self.stack.pop()
         assert(right != 0, "Modulo by zero")
         let result = left % right
-        self.mem.push(value: result)
-        print("MOD: \(left) % \(right) = \(result)")
+        self.stack.push(value: result)
     }
 
     public mutating func AND() {
-        let right = self.mem.pop()
-        let left = self.mem.pop()
+        let right = self.stack.pop()
+        let left = self.stack.pop()
         let result = left & right
-        self.mem.push(value: result)
-        print("AND: \(left) & \(right) = \(result)")
+        self.stack.push(value: result)
     }
 
     public mutating func OR() {
-        let right = self.mem.pop()
-        let left = self.mem.pop()
+        let right = self.stack.pop()
+        let left = self.stack.pop()
         let result = left | right
-        self.mem.push(value: result)
-        print("OR: \(left) | \(right) = \(result)")
+        self.stack.push(value: result)
     }
 
     public mutating func XOR() {
-        let right = self.mem.pop()
-        let left = self.mem.pop()
+        let right = self.stack.pop()
+        let left = self.stack.pop()
         let result = left ^ right
-        self.mem.push(value: result)
-        print("XOR: \(left) ^ \(right) = \(result)")
+        self.stack.push(value: result)
     }
 }
