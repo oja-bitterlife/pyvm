@@ -1,4 +1,5 @@
 from assets.vm import *
+import argparse
 import ast
 
 # 例：超簡易8bit VMのオペコード定義
@@ -6,6 +7,7 @@ OP_HALT      = 0x00
 OP_LDC       = 0x01  # Load (R0) Constant(word)
 OP_LD        = 0x02  # Load (R0) from memory
 OP_ST        = 0x03  # Store (R0) to memory
+OP_STI       = 0x04  # Store (R0) to VM[R1]
 OP_JMP       = 0x10  # Jump
 OP_JZ        = 0x11  # Jump if Zero (R0 == 0)
 OP_JNZ       = 0x12  # Jump if Not Zero (R0 != 0)
@@ -32,15 +34,6 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.has_main = False
         self.with_word = False
 
-    def LD_CONST(self, subject, reg=VM_R0):
-        self.code.append(OP_LDC)
-        self.with_word = True
-        self.visit(subject)
-        self.with_word = False
-        if reg is not VM_R0:
-            self.code.append(OP_ST)
-            self.code.append(reg)  # 指定されたレジスタに保存
-
     def LD_CONST_VAL(self, val, reg=VM_R0):
         self.code.append(OP_LDC)
         self.code.append(val & 0xff)  # 下位8bit
@@ -58,8 +51,6 @@ class BytecodeCompiler(ast.NodeVisitor):
 
     # mainから始める
     def visit_FunctionDef(self, node):
-        print(f"Compiling function: {node.name}")
-
         # 関数名が "main" であるかをチェック
         if node.name == "main":
             # main関数がすでに存在する場合はエラーを出す
@@ -73,36 +64,52 @@ class BytecodeCompiler(ast.NodeVisitor):
                 self.visit(stmt)
 
     def visit_Return(self, node):
+        val = 0
         if node.value is not None:
-            self.LD_CONST(node.value)  # R0に返す値をロード
+            val = self.visit(node.value)
+
+        if not isinstance(node.value, ast.Constant):
+            self.code.append(OP_LD)
+            self.code.append(val)  # アドレスからR0にロード
         else:
-            self.LD_CONST_VAL(0)  # Noneの場合は0を返す
+            self.LD_CONST_VAL(val)  # 定数をR0にロード
+
         self.code.append(OP_HALT)  # Return時にVMを停止させる
 
 
     def visit_Constant(self, node):
-        val = int(node.value)
-        self.code.append(val & 0xff)  # 下位8bit
-        if self.with_word:
-            self.code.append((val >> 8) & 0xff)  # 上位8bitも
+        return int(node.value)
 
     def visit_Name(self, node):
-        val = globals().get(node.id)
-        if val is not None:
-            self.code.append(val & 0xff)  # 下位8bit
-            if self.with_word:
-                self.code.append((val >> 8) & 0xff)  # 上位8bitも
-        else:
-            raise NameError(f"Name '{node.id}' is not defined in compiler context.")
+        return globals().get(node.id)
 
-    # VM[]の中身を取得する
+    # VM[index]のindex部分を返す
     def visit_Subscript(self, node):
         # VM[]以外を却下する
         if not isinstance(node.value, ast.Name) or node.value.id != 'VM':
             raise NotImplementedError("Only VM[] subscript is supported.")
+        return self.visit(node.slice)  # インデックスを返す
 
-        self.code.append(OP_LD)
-        self.visit(node.slice)
+    def visit_Assign(self, node):
+        # 代入の左辺がVM[]であることを確認
+        if not isinstance(node.targets[0], ast.Subscript) or not isinstance(node.targets[0].value, ast.Name) or node.targets[0].value.id != 'VM':
+            raise NotImplementedError("Only assignment to VM[] is supported.")
+
+        # 左辺のインデックスを評価してR1にロード
+        left_index = self.visit(node.targets[0].slice)
+        self.LD_CONST_VAL(left_index, VM_R1)  # R1にアドレスを保存
+
+        # 右辺を評価してR0にロード
+        if isinstance(node.value, ast.Constant):
+            self.LD_CONST_VAL(node.value.value)  # 定数をR0にロード
+        else:
+            addr = self.visit(node.value)  # それ以外はアドレス
+            self.code.append(OP_LD)
+            self.code.append(addr)  # アドレスからR0にロード
+
+        # R0の値をVM[R1]にストア
+        self.code.append(OP_STI)
+        self.code.append(VM_R1)  # R1に保存されたアドレスにストア
 
     def visit_If(self, node):
         # 条件式を評価するコードを生成
@@ -122,12 +129,13 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.code[jump_fixup_pos] = min(ADDR_ERROR, target_pos)
 
     def visit_Compare(self, node):
-        # 左辺を評価
-        self.LD_CONST(node.left, VM_R3)  # R3に保存
+        left = self.visit(node.left)  # 左辺を評価
+        self.LD_CONST_VAL(left, VM_R3)  # R3に保存
         
         for op, right in zip(node.ops, node.comparators):
             # 右辺を評価
-            self.LD_CONST(right, VM_R1)  # R1に保存
+            right = self.visit(right)  # 右辺を評価
+            self.LD_CONST_VAL(right, VM_R1)  # R1に保存
 
             # 比較する値を引っ張ってくる
             self.code.append(OP_LD)
@@ -325,7 +333,11 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code.append(VM_R3)  # R3に保存
 
 # 使用例
-with open("assets/test.py", "r") as f:
+arg_parser = argparse.ArgumentParser(description="Compile Python code to bytecode for a simple VM.")
+arg_parser.add_argument("input_file", help="Path to the input Python file.")
+args = arg_parser.parse_args()
+
+with open(args.input_file, "r") as f:
     tree = ast.parse(f.read())
 
     compiler = BytecodeCompiler()
@@ -335,4 +347,3 @@ with open("assets/test.py", "r") as f:
 # Hex出力
 binary_data = bytes(compiler.code)
 print(" ".join(f"{byte:02X}" for byte in binary_data))
-

@@ -67,6 +67,8 @@ public struct swiftVMLib {
             LD()
         case OP_ST:
             ST()
+        case OP_STI:
+            STI()
         case OP_JMP:
             assert(
                 self.pc == self.code[self.pc],
@@ -76,9 +78,23 @@ public struct swiftVMLib {
             JZ()
         case OP_JNZ:
             JNZ()
+        case OP_CMP:
+            CMP()
+        case OP_NOT:
+            NOT()
+        case OP_ADD:
+            ADD()
+        case OP_SUB:
+            SUB()
+        case OP_MUL:
+            MUL()
+        case OP_DIV:
+            DIV()
+        case OP_MOD:
+            MOD()
 
         default:
-            assert(false, "Unknown opcode: \(op)")
+            assert(false, "Unknown opcode(pc:\(self.pc-1)): \(op)")
         }
 
         assert(self.pc < 256, "Program counter out of bounds")
@@ -87,12 +103,13 @@ public struct swiftVMLib {
 
     public mutating func LDC() {
         // LDC命令の実装
-        let upper = self.code[self.pc]
-        self.pc += 1
         let lower = self.code[self.pc]
+        self.pc += 1
+        let upper = self.code[self.pc]
         self.pc += 1
         let value = UInt16(upper) << 8 | UInt16(lower)
         self.mem[0] = value
+        print("VM[0] = \(value)")
     }
 
     public mutating func LD() {
@@ -100,12 +117,22 @@ public struct swiftVMLib {
         let addr = self.code[self.pc]
         self.pc += 1
         self.mem[0] = self.mem[Int(addr)]
+        print("VM[0] = VM[\(addr)]")
     }
     public mutating func ST() {
         // ST命令の実装
         let addr = self.code[self.pc]
         self.pc += 1
         self.mem[Int(addr)] = self.mem[0]
+        print("VM[\(addr)] = VM[0]")
+    }
+    public mutating func STI() {
+        // STI命令の実装
+        let index = Int(self.code[self.pc])
+        self.pc += 1
+        let addr = self.mem[index]  // R1に格納されたアドレスを取得
+        self.mem[Int(addr)] = self.mem[0]
+        print("VM[VM[\(index)]] = VM[0]")
     }
 
     public mutating func JZ() {
@@ -124,13 +151,6 @@ public struct swiftVMLib {
             self.pc = Int(addr)
         }
     }
-    // OP_CMP       = 0x20  # R0とR1を比較してR0に 0 or 1 で結果を格納。比較演算はSubコードで指定する。
-    // OP_NOT       = 0x30  # R0 = R0 != 0 ? 1 : 0
-    // OP_ADD       = 0x31  # R0 = R0 + R1
-    // OP_SUB       = 0x32  # R0 = R0 - R1
-    // OP_MUL       = 0x33  # R0 = R0 * R1
-    // OP_DIV       = 0x34  # R0 = R0 / R1
-    // OP_MOD       = 0x35  # R0 = R0 % R1
 
     public mutating func CMP() {
         let subcode = Int(self.code[self.pc])
@@ -153,6 +173,7 @@ public struct swiftVMLib {
             assert(false, "Unknown comparison subcode: \(subcode)")
         }
     }
+
     public mutating func NOT() {
         self.mem[0] = (self.mem[0] != 0) ? 1 : 0
     }

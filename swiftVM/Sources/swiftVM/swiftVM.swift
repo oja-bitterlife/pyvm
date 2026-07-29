@@ -1,7 +1,9 @@
 // The Swift Programming Language
 // https://docs.swift.org/swift-book
-
+import Foundation
 import swiftVMLib
+
+let filePath = "../assets/test.bin"
 
 @main
 struct swiftVM {
@@ -9,7 +11,15 @@ struct swiftVM {
 
         // 1. 仮実行用に、Swiftの管理下でメモリ領域（配列）を確保する
         var rawMem = [UInt16](repeating: 0, count: 256)
-        let rawCode = [UInt8](repeating: 0, count: 256)  // 適当なバイトコードの初期値
+        //        let rawCode = [UInt8](repeating: 0, count: 256)  // 適当なバイトコードの初期値
+        // 2. バイトコードをファイルから読み込む
+        let rawCode: [UInt8]
+        do {
+            rawCode = try Data(contentsOf: URL(fileURLWithPath: filePath)).map { $0 }
+        } catch {
+            print("Error reading file: \(error)")
+            return
+        }
 
         var vm = rawMem.withUnsafeMutableBufferPointer { memBuf in
             return rawCode.withUnsafeBufferPointer { codeBuf in
