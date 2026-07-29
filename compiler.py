@@ -8,6 +8,8 @@ OP_LDC       = 0x01  # Load (R0) Constant(word)
 OP_LD        = 0x02  # Load (R0) from memory
 OP_ST        = 0x03  # Store (R0) to memory
 OP_STA       = 0x04  # Store (R0) to VM[R1]
+OP_PUSH      = 0x05  # Push (R0) to stack
+OP_POP       = 0x06  # Pop from stack to (R0)
 OP_JMP       = 0x10  # Jump
 OP_JZ        = 0x11  # Jump if Zero (R0 == 0)
 OP_JNZ       = 0x12  # Jump if Not Zero (R0 != 0)
@@ -18,6 +20,9 @@ OP_SUB       = 0x32  # R0 = R0 - R1
 OP_MUL       = 0x33  # R0 = R0 * R1
 OP_DIV       = 0x34  # R0 = R0 / R1
 OP_MOD       = 0x35  # R0 = R0 % R1
+OP_AND       = 0x36  # R0 = R0 & R1
+OP_OR        = 0x37  # R0 = R0 | R1
+OP_XOR       = 0x38  # R0 = R0 ^ R1
 OP_TEST      = 0xfe
 
 # 比較演算のサブコード
@@ -94,17 +99,19 @@ class BytecodeCompiler(ast.NodeVisitor):
         if not isinstance(node.targets[0], ast.Subscript) or not isinstance(node.targets[0].value, ast.Name) or node.targets[0].value.id != 'VM':
             raise NotImplementedError("Only assignment to VM[] is supported.")
 
-        # 左辺のインデックスを評価してR3(バックアップ)にロード
+        # 右辺を評価してPUSH
+        self.visit(node.value)
+        self.code.append(OP_PUSH)
+
+        # 左辺のインデックスを評価してR1にロード
         self.visit(node.targets[0].slice)
         self.code.append(OP_ST)
-        self.code.append(VM_R3)
+        self.code.append(VM_R1)  # R1に保存
 
-        # 右辺を評価してR0にロード(R3以外は汚しても大丈夫)
-        self.visit(node.value)
-
-        # R0の値をVM[R3]にストア
+        # スタックの値をVM[R1]にストア
+        self.code.append(OP_POP)
         self.code.append(OP_STA)
-        self.code.append(VM_R3)  # R3に保存されたアドレスにストア
+        self.code.append(VM_R1)  # R1に保存されたアドレスにストア
 
     def visit_If(self, node):
         # 条件式を評価するコードを生成
@@ -124,19 +131,17 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.code[jump_fixup_pos] = min(ADDR_ERROR, target_pos)
 
     def visit_Compare(self, node):
-        # 左辺を一旦R2に保存
+        # 左辺を一旦PUSH
         self.visit(node.left)
-        self.code.append(OP_ST)
-        self.code.append(VM_R2)  # R2に保存
+        self.code.append(OP_PUSH)
 
         is_first = True
         for op, right in zip(node.ops, node.comparators):
-            # 初回以降は右辺(R1)をR2にして次の比較の左辺として使用する
+            # 連続比較の場合前の右辺を使うのでPUSHしておく
             if not is_first:
                 self.code.append(OP_LD)
                 self.code.append(VM_R1)
-                self.code.append(OP_ST)
-                self.code.append(VM_R2)
+                self.code.append(OP_PUSH)
             is_first = False
 
             # 右辺を評価
@@ -144,9 +149,8 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code.append(OP_ST)
             self.code.append(VM_R1)  # R1に保存
 
-            # 比較する値を引っ張ってくる
-            self.code.append(OP_LD)
-            self.code.append(VM_R2)  # R2からR0にロード
+            # 比較する値をR0に引っ張ってくる
+            self.code.append(OP_POP)
 
             # 演算子の種類に応じたサブコードを決定
             if isinstance(op, ast.Eq):
@@ -168,7 +172,7 @@ class BytecodeCompiler(ast.NodeVisitor):
             # R0,R1をセット下後OP_CMP命令とサブコードを出力。比較結果はR0に格納される
             self.code.append(OP_CMP)
             self.code.append(cmp_subcode)
-
+            
 
     def visit_Match(self, node):
         # match の対象（subject）を評価
@@ -191,7 +195,7 @@ class BytecodeCompiler(ast.NodeVisitor):
                 
             # 通常の値マッチングの場合 (例: case 0:, case 1:)
             if isinstance(pattern, ast.MatchValue):
-                # パターンの値を評価
+                # パターンの値をR0へ
                 self.visit(pattern.value)
                 
                 # R1に保存されたmatchの対象と比較
@@ -282,24 +286,36 @@ class BytecodeCompiler(ast.NodeVisitor):
         else:
             raise NotImplementedError(f"Unsupported unary operator: {type(node.op)}")
 
-    # # 二項演算の処理
-    # def visit_BinOp(self, node):
-    #     self.LD_CONST(node.right, VM_R1)  # R1に保存
-    #     self.LD_CONST(node.left)  # R0に保存
+    # 二項演算の処理
+    def visit_BinOp(self, node):
+        self.visit(node.left)
+        self.code.append(OP_PUSH)
 
-    #     # R0 = R0 <op> R1
-    #     if isinstance(node.op, ast.Add):
-    #         self.code.append(OP_ADD)
-    #     elif isinstance(node.op, ast.Sub):
-    #         self.code.append(OP_SUB)
-    #     elif isinstance(node.op, ast.Mult):
-    #         self.code.append(OP_MUL)
-    #     elif isinstance(node.op, ast.Div):
-    #         self.code.append(OP_DIV)
-    #     elif isinstance(node.op, ast.Mod):
-    #         self.code.append(OP_MOD)
-    #     else:
-    #         raise NotImplementedError(f"Unsupported binary operator: {type(node.op)}")
+        self.visit(node.right)
+        self.code.append(OP_ST)
+        self.code.append(VM_R1)  # R1に保存
+
+        self.code.append(OP_POP)  # 左辺をR0に戻す
+
+        # R0 = R0 <op> R1
+        if isinstance(node.op, ast.Add):
+            self.code.append(OP_ADD)
+        elif isinstance(node.op, ast.Sub):
+            self.code.append(OP_SUB)
+        elif isinstance(node.op, ast.Mult):
+            self.code.append(OP_MUL)
+        elif isinstance(node.op, ast.Div):
+            self.code.append(OP_DIV)
+        elif isinstance(node.op, ast.Mod):
+            self.code.append(OP_MOD)
+        elif isinstance(node.op, ast.BitAnd):
+            self.code.append(OP_AND)
+        elif isinstance(node.op, ast.BitOr):
+            self.code.append(OP_OR)
+        elif isinstance(node.op, ast.BitXor):
+            self.code.append(OP_XOR)
+        else:
+            raise NotImplementedError(f"Unsupported binary operator: {type(node.op)}")
 
     def visit_BoolOp(self, node):
         # 左辺を評価

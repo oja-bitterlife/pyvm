@@ -1,10 +1,14 @@
 let ADDR_ERROR = 0xFF
+let ADDR_SP = 4
+let ADDR_STACK = 14
 
 let OP_HALT = 0x00
 let OP_LDC = 0x01  // Load (R0) Constant(word)
 let OP_LD = 0x02  // Load (R0) from memory
 let OP_ST = 0x03  // Store (R0) to memory
 let OP_STA = 0x04  // Store (R0) to VM[R1]
+let OP_PUSH = 0x05  // Push (R0) to stack
+let OP_POP = 0x06  // Pop from stack to (R0)
 let OP_JMP = 0x10  // Jump
 let OP_JZ = 0x11  // Jump if Zero (R0 == 0)
 let OP_JNZ = 0x12  // Jump if Not Zero (R0 != 0)
@@ -15,6 +19,9 @@ let OP_SUB = 0x32  // R0 = R0 - R1
 let OP_MUL = 0x33  // R0 = R0 * R1
 let OP_DIV = 0x34  // R0 = R0 / R1
 let OP_MOD = 0x35  // R0 = R0 % R1
+let OP_AND = 0x36  // R0 = R0 & R1
+let OP_OR = 0x37  // R0 = R0 | R1
+let OP_XOR = 0x38  // R0 = R0 ^ R1
 
 // 比較演算のサブコード
 let CMP_EQ = 0x00  // R0 == R1

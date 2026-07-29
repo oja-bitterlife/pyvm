@@ -23,6 +23,7 @@ public struct swiftVMLib {
 
         fileprivate init(address: UInt) {
             self.ptr = UnsafeMutablePointer<UInt16>(bitPattern: address)!
+            ptr[ADDR_SP] = UInt16(ADDR_STACK)  // スタックポインタの初期化
         }
 
         public subscript(index: Int) -> UInt16 {
@@ -34,6 +35,20 @@ public struct swiftVMLib {
                 assert(index >= 0 && index < 256, "Memory index out of range")
                 ptr[index] = newValue
             }
+        }
+
+        public mutating func push(value: UInt16) {
+            let sp = Int(ptr[ADDR_SP])
+            assert(sp > ADDR_SP, "Stack underflow")
+            ptr[sp] = value
+            ptr[ADDR_SP] = UInt16(sp - 1)
+        }
+        public mutating func pop() -> UInt16 {
+            let sp = Int(ptr[ADDR_SP])
+            assert(sp <= ADDR_STACK, "Stack overflow")
+            let value = ptr[sp + 1]
+            ptr[ADDR_SP] = UInt16(sp + 1)
+            return value
         }
     }
 
@@ -54,6 +69,7 @@ public struct swiftVMLib {
     }
 
     public mutating func step() -> Bool {
+        print("PC:\(self.pc)", terminator: " - ")
         let op = Int(self.code[self.pc])
         self.pc += 1
 
@@ -69,6 +85,10 @@ public struct swiftVMLib {
             ST()
         case OP_STA:
             STA()
+        case OP_PUSH:
+            PUSH()
+        case OP_POP:
+            POP()
         case OP_JMP:
             assert(
                 self.pc == self.code[self.pc],
@@ -92,6 +112,12 @@ public struct swiftVMLib {
             DIV()
         case OP_MOD:
             MOD()
+        case OP_AND:
+            AND()
+        case OP_OR:
+            OR()
+        case OP_XOR:
+            XOR()
 
         default:
             assert(false, "Unknown opcode(pc:\(self.pc-1)): \(op)")
@@ -133,6 +159,17 @@ public struct swiftVMLib {
         let addr = self.mem[index]  // R1に格納されたアドレスを取得
         self.mem[Int(addr)] = self.mem[0]
         print("STA VM[VM[\(addr)]] = R0(\(self.mem[0]))")
+    }
+
+    public mutating func PUSH() {
+        // PUSH命令の実装
+        self.mem.push(value: self.mem[0])
+        print("PUSH R0(\(self.mem[0])) to stack")
+    }
+    public mutating func POP() {
+        // POP命令の実装
+        self.mem[0] = self.mem.pop()
+        print("POP from stack to R0(\(self.mem[0]))")
     }
 
     public mutating func JZ() {
@@ -179,23 +216,41 @@ public struct swiftVMLib {
     }
 
     public mutating func NOT() {
+        print("NOT: R0 = !\(self.mem[0])")
         self.mem[0] = (self.mem[0] != 0) ? 1 : 0
     }
     public mutating func ADD() {
+        print("ADD: R0 = \(self.mem[0]) + R1 = \(self.mem[1])")
         self.mem[0] = self.mem[0] &+ self.mem[1]  // Use wrapping addition to handle overflow
     }
     public mutating func SUB() {
+        print("SUB: R0 = \(self.mem[0]) - R1 = \(self.mem[1])")
         self.mem[0] = self.mem[0] &- self.mem[1]  // Use wrapping subtraction to handle underflow
     }
     public mutating func MUL() {
+        print("MUL: R0 = \(self.mem[0]) * R1 = \(self.mem[1])")
         self.mem[0] = self.mem[0] &* self.mem[1]  // Use wrapping multiplication to handle overflow
     }
     public mutating func DIV() {
+        print("DIV: R0 = \(self.mem[0]) / R1 = \(self.mem[1])")
         assert(self.mem[1] != 0, "Division by zero")
         self.mem[0] = self.mem[0] / self.mem[1]
     }
     public mutating func MOD() {
+        print("MOD: R0 = \(self.mem[0]) % R1 = \(self.mem[1])")
         assert(self.mem[1] != 0, "Modulo by zero")
         self.mem[0] = self.mem[0] % self.mem[1]
+    }
+    public mutating func AND() {
+        print("AND: R0 = \(self.mem[0]) & R1 = \(self.mem[1])")
+        self.mem[0] = self.mem[0] & self.mem[1]
+    }
+    public mutating func OR() {
+        print("OR: R0 = \(self.mem[0]) | R1 = \(self.mem[1])")
+        self.mem[0] = self.mem[0] | self.mem[1]
+    }
+    public mutating func XOR() {
+        print("XOR: R0 = \(self.mem[0]) ^ R1 = \(self.mem[1])")
+        self.mem[0] = self.mem[0] ^ self.mem[1]
     }
 }
