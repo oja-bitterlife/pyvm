@@ -5,15 +5,27 @@ import PackageDescription
 
 let package = Package(
     name: "swiftVM",
-    targets: [
+    products: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
-        .executableTarget(
-            name: "swiftVM"
+        .executable(
+            name: "swiftVM",
+            targets: ["swiftVM"],
         ),
-        .testTarget(
-            name: "swiftVMTests",
-            dependencies: ["swiftVM"]
+        .library(
+            name: "swiftVMLib",
+            targets: ["swiftVMLib"]
+        ),
+    ],
+    targets: [
+        // VMのコアロジック（no-allocateを意識した固定配列ベースの処理など）
+        .target(
+            name: "swiftVMLib"
+        ),
+        // 仮実行用バイナリ（GbaVmCoreをインポートしてテスト実行する）
+        .executableTarget(
+            name: "swiftVM",
+            dependencies: ["swiftVMLib"]
         ),
     ],
     swiftLanguageModes: [.v6]
