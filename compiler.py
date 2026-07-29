@@ -32,8 +32,8 @@ class BytecodeCompiler(ast.NodeVisitor):
     def __init__(self):
         self.code = bytearray()
         self.has_main = False
-        self.with_word = False
 
+    # 定数をロードするヘルパー関数(LDCは2byteの読み込み)
     def LD_CONST_VAL(self, val, reg=VM_R0):
         self.code.append(OP_LDC)
         self.code.append(val & 0xff)  # 下位8bit
@@ -42,11 +42,11 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code.append(OP_ST)
             self.code.append(reg)  # 指定されたレジスタに保存
 
-
-    # 未実装
+    # 未実装エラー
     def generic_visit(self, node):
         if self.has_main:
             raise NotImplementedError(f"Unsupported AST node: {type(node).__name__}")
+        # importとかはおまかせ
         super().generic_visit(node)
 
     # mainから始める
@@ -64,18 +64,19 @@ class BytecodeCompiler(ast.NodeVisitor):
                 self.visit(stmt)
 
     def visit_Return(self, node):
-        val = 0
+        val = 0  # Noneの場合は0を返す
         if node.value is not None:
             val = self.visit(node.value)
 
+        # 定数ならば直接R0にロード、そうでなければアドレスからロード
         if not isinstance(node.value, ast.Constant):
             self.code.append(OP_LD)
             self.code.append(val)  # アドレスからR0にロード
         else:
             self.LD_CONST_VAL(val)  # 定数をR0にロード
 
-        self.code.append(OP_HALT)  # Return時にVMを停止させる
-
+        # Return時にVMを停止させる
+        self.code.append(OP_HALT)
 
     def visit_Constant(self, node):
         return int(node.value)
@@ -103,9 +104,8 @@ class BytecodeCompiler(ast.NodeVisitor):
         if isinstance(node.value, ast.Constant):
             self.LD_CONST_VAL(node.value.value)  # 定数をR0にロード
         else:
-            addr = self.visit(node.value)  # それ以外はアドレス
             self.code.append(OP_LD)
-            self.code.append(addr)  # アドレスからR0にロード
+            self.code.append(self.visit(node.value))  # アドレスからR0にロード
 
         # R0の値をVM[R1]にストア
         self.code.append(OP_STI)
