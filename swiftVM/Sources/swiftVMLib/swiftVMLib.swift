@@ -117,14 +117,14 @@ public struct swiftVMLib {
         let addr = self.code[self.pc]
         self.pc += 1
         self.mem[0] = self.mem[Int(addr)]
-        print("VM[0] = VM[\(addr)]")
+        print("VM[0] = VM[\(addr)](\(self.mem[Int(addr)]))")
     }
     public mutating func ST() {
         // ST命令の実装
         let addr = self.code[self.pc]
         self.pc += 1
         self.mem[Int(addr)] = self.mem[0]
-        print("VM[\(addr)] = VM[0]")
+        print("VM[\(addr)] = VM[0](\(self.mem[0]))")
     }
     public mutating func STA() {
         // STA命令の実装
@@ -132,7 +132,7 @@ public struct swiftVMLib {
         self.pc += 1
         let addr = self.mem[index]  // R1に格納されたアドレスを取得
         self.mem[Int(addr)] = self.mem[0]
-        print("VM[VM[\(index)]] = VM[0]")
+        print("VM[VM[\(addr)]] = VM[0](\(self.mem[0]))")
     }
 
     public mutating func JZ() {
@@ -172,6 +172,8 @@ public struct swiftVMLib {
         default:
             assert(false, "Unknown comparison subcode: \(subcode)")
         }
+
+        print("VM[0] = \(self.mem[0]) (comparison result)")
     }
 
     public mutating func NOT() {

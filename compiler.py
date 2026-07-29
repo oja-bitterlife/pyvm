@@ -8,7 +8,6 @@ OP_LDC       = 0x01  # Load (R0) Constant(word)
 OP_LD        = 0x02  # Load (R0) from memory
 OP_ST        = 0x03  # Store (R0) to memory
 OP_STA       = 0x04  # Store (R0) to VM[R1]
-OP_SWP       = 0x05  # Swap R0 and VM[addr]
 OP_JMP       = 0x10  # Jump
 OP_JZ        = 0x11  # Jump if Zero (R0 == 0)
 OP_JNZ       = 0x12  # Jump if Not Zero (R0 != 0)
@@ -19,6 +18,7 @@ OP_SUB       = 0x32  # R0 = R0 - R1
 OP_MUL       = 0x33  # R0 = R0 * R1
 OP_DIV       = 0x34  # R0 = R0 / R1
 OP_MOD       = 0x35  # R0 = R0 % R1
+OP_TEST      = 0xfe
 
 # 比較演算のサブコード
 CMP_EQ       = 0x00  # R0 == R1
@@ -64,43 +64,47 @@ class BytecodeCompiler(ast.NodeVisitor):
             for stmt in node.body:
                 self.visit(stmt)
 
-    # def visit_Return(self, node):
-    #     if node.value is None:
-    #         self.LD_CONST_VAL(0)  # Noneの場合は0をR0にロード
-    #     else:
-    #         self.LD_CONST(node.value)  # R0にロード
+    def visit_Return(self, node):
+        if node.value is None:
+            self.LD_CONST_VAL(0)  # Noneの場合は0をR0にロード
+        else:
+            self.visit(node.value)  # R0にロード
 
-    #     # Return時にVMを停止させる
-    #     self.code.append(OP_HALT)
+        # Return時にVMを停止させる
+        self.code.append(OP_HALT)
 
-    # def visit_Constant(self, node):
-    #     return int(node.value), False
+    def visit_Constant(self, node):
+        self.LD_CONST_VAL(int(node.value))
 
-    # def visit_Name(self, node):
-    #     return globals().get(node.id), False
+    def visit_Name(self, node):
+        self.LD_CONST_VAL(globals().get(node.id))
 
-    # # VM[index]のindex部分を返す
-    # def visit_Subscript(self, node):
-    #     # VM[]以外を却下する
-    #     if not isinstance(node.value, ast.Name) or node.value.id != 'VM':
-    #         raise NotImplementedError("Only VM[] subscript is supported.")
-    #     return self.visit(node.slice), True  # インデックスを返す
+    # VM[index]のをR0にロードする
+    def visit_Subscript(self, node):
+        # VM[]以外を却下する
+        if not isinstance(node.value, ast.Name) or node.value.id != 'VM':
+            raise NotImplementedError("Only VM[] subscript is supported.")
+        self.visit(node.slice)
+        if(self.code.pop() != 0):
+            raise NotImplementedError("8bit VM only supports 0-255 index for VM[].")
+        self.code[-2] = OP_LD  # LDCをLDに置き換える
 
-    # def visit_Assign(self, node):
-    #     # 代入の左辺がVM[]であることを確認
-    #     if not isinstance(node.targets[0], ast.Subscript) or not isinstance(node.targets[0].value, ast.Name) or node.targets[0].value.id != 'VM':
-    #         raise NotImplementedError("Only assignment to VM[] is supported.")
+    def visit_Assign(self, node):
+        # 代入の左辺がVM[]であることを確認
+        if not isinstance(node.targets[0], ast.Subscript) or not isinstance(node.targets[0].value, ast.Name) or node.targets[0].value.id != 'VM':
+            raise NotImplementedError("Only assignment to VM[] is supported.")
 
-    #     # 左辺のインデックスを評価してR1にロード
-    #     self.LD_CONST(node.targets[0].slice, VM_R1)  # R1にアドレスを保存
+        # 左辺のインデックスを評価してR3(バックアップ)にロード
+        self.visit(node.targets[0].slice)
+        self.code.append(OP_ST)
+        self.code.append(VM_R3)
 
-    #     # 右辺を評価してR0にロード
-    #     self.visit(node.value)
+        # 右辺を評価してR0にロード(R3以外は汚しても大丈夫)
+        self.visit(node.value)
 
-
-    #     # R0の値をVM[R1]にストア
-    #     self.code.append(OP_STA)
-    #     self.code.append(VM_R1)  # R1に保存されたアドレスにストア
+        # R0の値をVM[R3]にストア
+        self.code.append(OP_STA)
+        self.code.append(VM_R3)  # R3に保存されたアドレスにストア
 
     # def visit_If(self, node):
     #     # 条件式を評価するコードを生成
@@ -118,6 +122,53 @@ class BytecodeCompiler(ast.NodeVisitor):
     #     # ジャンプ先（ブロックの終端）のオフセットを計算して代入
     #     target_pos = len(self.code)
     #     self.code[jump_fixup_pos] = min(ADDR_ERROR, target_pos)
+
+    def visit_Compare(self, node):
+        # 左辺を一旦R2に保存
+        self.visit(node.left)
+        self.code.append(OP_ST)
+        self.code.append(VM_R2)  # R2に保存
+
+        is_first = True
+        for op, right in zip(node.ops, node.comparators):
+            # 初回以降は右辺(R1)をR2にして次の比較の左辺として使用する
+            if not is_first:
+                self.code.append(OP_LD)
+                self.code.append(VM_R1)
+                self.code.append(OP_ST)
+                self.code.append(VM_R2)
+            is_first = False
+
+            # 右辺を評価
+            self.visit(right)
+            self.code.append(OP_ST)
+            self.code.append(VM_R1)  # R1に保存
+
+            # 比較する値を引っ張ってくる
+            self.code.append(OP_LD)
+            self.code.append(VM_R2)  # R2からR0にロード
+
+            # 演算子の種類に応じたサブコードを決定
+            if isinstance(op, ast.Eq):
+                cmp_subcode = CMP_EQ
+            elif isinstance(op, ast.NotEq):
+                cmp_subcode = CMP_NE
+            elif isinstance(op, ast.Lt):
+                cmp_subcode = CMP_LT
+            elif isinstance(op, ast.LtE):
+                cmp_subcode = CMP_LE
+            elif isinstance(op, ast.Gt):
+                cmp_subcode = CMP_GT
+            elif isinstance(op, ast.GtE):
+                cmp_subcode = CMP_GE
+            # 知らない比較演算子
+            else:
+                raise NotImplementedError(f"Unsupported comparison operator: {type(op)}")
+            
+            # R0,R1をセット下後OP_CMP命令とサブコードを出力。比較結果はR0に格納される
+            self.code.append(OP_CMP)
+            self.code.append(cmp_subcode)
+
 
     # def visit_Compare(self, node):
     #     self.LD_CONST(node.left, VM_R3)  # R3に保存
