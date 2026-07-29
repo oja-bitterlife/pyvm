@@ -109,7 +109,7 @@ public struct swiftVMLib {
         self.pc += 1
         let value = UInt16(upper) << 8 | UInt16(lower)
         self.mem[0] = value
-        print("VM[0] = \(value)")
+        print("LDC R0 = \(value)")
     }
 
     public mutating func LD() {
@@ -117,14 +117,14 @@ public struct swiftVMLib {
         let addr = self.code[self.pc]
         self.pc += 1
         self.mem[0] = self.mem[Int(addr)]
-        print("VM[0] = VM[\(addr)](\(self.mem[Int(addr)]))")
+        print("LD R0 = VM[\(addr)](\(self.mem[Int(addr)]))")
     }
     public mutating func ST() {
         // ST命令の実装
         let addr = self.code[self.pc]
         self.pc += 1
         self.mem[Int(addr)] = self.mem[0]
-        print("VM[\(addr)] = VM[0](\(self.mem[0]))")
+        print("ST VM[\(addr)] = R0(\(self.mem[0]))")
     }
     public mutating func STA() {
         // STA命令の実装
@@ -132,7 +132,7 @@ public struct swiftVMLib {
         self.pc += 1
         let addr = self.mem[index]  // R1に格納されたアドレスを取得
         self.mem[Int(addr)] = self.mem[0]
-        print("VM[VM[\(addr)]] = VM[0](\(self.mem[0]))")
+        print("STA VM[VM[\(addr)]] = R0(\(self.mem[0]))")
     }
 
     public mutating func JZ() {
@@ -142,6 +142,7 @@ public struct swiftVMLib {
         if self.mem[0] == 0 {
             self.pc = Int(addr)
         }
+        print("JZ: R0 == 0, jumping to \(addr)")
     }
     public mutating func JNZ() {
         // JNZ命令の実装
@@ -150,6 +151,7 @@ public struct swiftVMLib {
         if self.mem[0] != 0 {
             self.pc = Int(addr)
         }
+        print("JNZ: R0 != 0, jumping to \(addr)")
     }
 
     public mutating func CMP() {
@@ -173,7 +175,7 @@ public struct swiftVMLib {
             assert(false, "Unknown comparison subcode: \(subcode)")
         }
 
-        print("VM[0] = \(self.mem[0]) (comparison result)")
+        print("CMP R0 = \(self.mem[0]) (comparison result)")
     }
 
     public mutating func NOT() {

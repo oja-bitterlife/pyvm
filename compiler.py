@@ -106,22 +106,22 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.code.append(OP_STA)
         self.code.append(VM_R3)  # R3に保存されたアドレスにストア
 
-    # def visit_If(self, node):
-    #     # 条件式を評価するコードを生成
-    #     self.visit(node.test)
+    def visit_If(self, node):
+        # 条件式を評価するコードを生成
+        self.visit(node.test)
         
-    #     # 条件が偽の場合のジャンプ命令 (仮のジャンプ先を空けておく)
-    #     self.code.append(OP_JZ)
-    #     jump_fixup_pos = len(self.code)
-    #     self.code.append(ADDR_ERROR)  # 仮のオフセット
+        # 条件が偽の場合のジャンプ命令 (仮のジャンプ先を空けておく)
+        self.code.append(OP_JZ)
+        jump_fixup_pos = len(self.code)
+        self.code.append(ADDR_ERROR)  # 仮のオフセット
 
-    #     # ifブロック内の処理をコンパイル
-    #     for stmt in node.body:
-    #         self.visit(stmt)
+        # ifブロック内の処理をコンパイル
+        for stmt in node.body:
+            self.visit(stmt)
             
-    #     # ジャンプ先（ブロックの終端）のオフセットを計算して代入
-    #     target_pos = len(self.code)
-    #     self.code[jump_fixup_pos] = min(ADDR_ERROR, target_pos)
+        # ジャンプ先（ブロックの終端）のオフセットを計算して代入
+        target_pos = len(self.code)
+        self.code[jump_fixup_pos] = min(ADDR_ERROR, target_pos)
 
     def visit_Compare(self, node):
         # 左辺を一旦R2に保存
@@ -170,91 +170,55 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code.append(cmp_subcode)
 
 
-    # def visit_Compare(self, node):
-    #     self.LD_CONST(node.left, VM_R3)  # R3に保存
+    def visit_Match(self, node):
+        # match の対象（subject）を評価
+        self.visit(node.subject)
+        self.code.append(OP_ST)
+        self.code.append(VM_R1)  # R1に保存
         
-    #     for op, right in zip(node.ops, node.comparators):
-    #         # 右辺を評価
-    #         self.LD_CONST(right, VM_R1)  # R1に保存
-
-    #         # 比較する値を引っ張ってくる
-    #         self.code.append(OP_LD)
-    #         self.code.append(VM_R3)  # R3からR0にロード
-
-    #         # 演算子の種類に応じたサブコードを決定
-    #         if isinstance(op, ast.Eq):
-    #             cmp_subcode = CMP_EQ
-    #         elif isinstance(op, ast.NotEq):
-    #             cmp_subcode = CMP_NE
-    #         elif isinstance(op, ast.Lt):
-    #             cmp_subcode = CMP_LT
-    #         elif isinstance(op, ast.LtE):
-    #             cmp_subcode = CMP_LE
-    #         elif isinstance(op, ast.Gt):
-    #             cmp_subcode = CMP_GT
-    #         elif isinstance(op, ast.GtE):
-    #             cmp_subcode = CMP_GE
-    #         # 知らない比較演算子
-    #         else:
-    #             raise NotImplementedError(f"Unsupported comparison operator: {type(op)}")
+        # match 全体を抜けた後のジャンプ先アドレスを保持するリスト
+        exit_jump_patches = []
+        
+        for case in node.cases:
+            pattern = case.pattern
             
-    #         # OP_CMP命令とサブコードを出力
-    #         self.code.append(OP_CMP)
-    #         self.code.append(cmp_subcode)
+            # ワイルドカード（case _:) の場合
+            if isinstance(pattern, ast.MatchAs) and pattern.name is None:
+                # デフォルトケースの処理
+                for stmt in case.body:
+                    self.visit(stmt)
+                break  # デフォルトケースは最後に置くべきなので、ここでループを抜ける
+                
+            # 通常の値マッチングの場合 (例: case 0:, case 1:)
+            if isinstance(pattern, ast.MatchValue):
+                # パターンの値を評価
+                self.visit(pattern.value)
+                
+                # R1に保存されたmatchの対象と比較
+                self.code.append(OP_CMP)  # R0 == R1
+                
+                # 条件が偽の場合
+                self.code.append(OP_JZ)
+                jump_fixup_pos = len(self.code)
+                self.code.append(ADDR_ERROR)  # 仮のオフセット
+                
+                # caseブロック内の処理をコンパイル
+                for stmt in case.body:
+                    self.visit(stmt)
+                
+                # caseブロックを抜けた後のジャンプ命令 (仮のジャンプ先を空けておく)
+                self.code.append(OP_JMP)
+                exit_jump_pos = len(self.code)
+                self.code.append(ADDR_ERROR)  # 仮のオフセット
+                exit_jump_patches.append(exit_jump_pos)
+                
+                # ジャンプ先（caseブロックの終端）のオフセットを計算してパッチを当てる
+                target_pos = len(self.code)
+                self.code[jump_fixup_pos] = min(ADDR_ERROR, target_pos)
 
-    #         # 右辺(R1)をR3に保存して次の比較に備える
-    #         self.code.append(OP_LD)
-    #         self.code.append(VM_R1)  # R1からR0にロード
-    #         self.code.append(OP_ST)
-    #         self.code.append(VM_R3)  # R3に保存
-
-    # def visit_Match(self, node):
-    #     # match の対象（subject）を評価
-    #     self.LD_CONST(node.subject, VM_R1)  # R1に保存
-        
-    #     # match 全体を抜けた後のジャンプ先アドレスを保持するリスト
-    #     exit_jump_patches = []
-        
-    #     for case in node.cases:
-    #         pattern = case.pattern
-            
-    #         # ワイルドカード（case _:) の場合
-    #         if isinstance(pattern, ast.MatchAs) and pattern.name is None:
-    #             # デフォルトケースの処理
-    #             for stmt in case.body:
-    #                 self.visit(stmt)
-    #             break  # デフォルトケースは最後に置くべきなので、ここでループを抜ける
-                
-    #         # 通常の値マッチングの場合 (例: case 0:, case 1:)
-    #         if isinstance(pattern, ast.MatchValue):
-    #             # パターンの値を評価
-    #             self.LD_CONST(pattern.value)
-                
-    #             # R1に保存されたmatchの対象と比較
-    #             self.code.append(OP_CMP)  # R0 == R1
-                
-    #             # 条件が偽の場合
-    #             self.code.append(OP_JZ)
-    #             jump_fixup_pos = len(self.code)
-    #             self.code.append(ADDR_ERROR)  # 仮のオフセット
-                
-    #             # caseブロック内の処理をコンパイル
-    #             for stmt in case.body:
-    #                 self.visit(stmt)
-                
-    #             # caseブロックを抜けた後のジャンプ命令 (仮のジャンプ先を空けておく)
-    #             self.code.append(OP_JMP)
-    #             exit_jump_pos = len(self.code)
-    #             self.code.append(ADDR_ERROR)  # 仮のオフセット
-    #             exit_jump_patches.append(exit_jump_pos)
-                
-    #             # ジャンプ先（caseブロックの終端）のオフセットを計算してパッチを当てる
-    #             target_pos = len(self.code)
-    #             self.code[jump_fixup_pos] = min(ADDR_ERROR, target_pos)
-
-    #     # match全体を抜けた後のジャンプ命令のパッチを当てる
-    #     for exit_jump_pos in exit_jump_patches:
-    #         self.code[exit_jump_pos] = min(ADDR_ERROR, len(self.code))
+        # match全体を抜けた後のジャンプ命令のパッチを当てる
+        for exit_jump_pos in exit_jump_patches:
+            self.code[exit_jump_pos] = min(ADDR_ERROR, len(self.code))
 
     # def visit_For(self, node):
     #     # range(N) の N が定数の場合のみ対応する場合
@@ -292,30 +256,30 @@ class BytecodeCompiler(ast.NodeVisitor):
     #     target_pos = len(self.code)
     #     self.code[exit_jump_pos] = min(ADDR_ERROR, target_pos)
 
-    # def visit_UnaryOp(self, node):
-    #     # マイナスの単項演算子
-    #     if isinstance(node.op, ast.USub):
-    #         # 定数のマイナス
-    #         if isinstance(node.operand, ast.Constant):
-    #             self.LD_CONST_VAL(-int(node.operand.value))
-    #         # 0から引くことでマイナスを表現する
-    #         else:
-    #             # オペランド（変数など）を評価してR1に入れる
-    #             self.LD_CONST(node.operand, VM_R1)  # R1に保存
+    def visit_UnaryOp(self, node):
+        # マイナスの単項演算子
+        if isinstance(node.op, ast.USub):
+            # 定数のマイナス
+            if isinstance(node.operand, ast.Constant):
+                self.LD_CONST_VAL(-int(node.operand.value))
+            # 0から引くことでマイナスを表現する
+            else:
+                # オペランド（変数など）を評価してR1に入れる
+                self.LD_CONST(node.operand, VM_R1)  # R1に保存
 
-    #             # 0 から operand (R1) を引く
-    #             self.LD_CONST_VAL(0)  # R0に0をロード
-    #             self.code.append(OP_SUB) # R0 = R0 - R1
+                # 0 から operand (R1) を引く
+                self.LD_CONST_VAL(0)  # R0に0をロード
+                self.code.append(OP_SUB) # R0 = R0 - R1
 
-    #     elif isinstance(node.op, ast.UAdd):
-    #         # プラス (+) の処理（中身をそのまま評価するだけでOK）
-    #         self.visit(node.operand)
-    #     elif isinstance(node.op, ast.Not):
-    #         # 否定 (not) の処理（OP_NOT 命令を使うなど）
-    #         self.visit(node.operand)
-    #         self.code.append(OP_NOT)
-    #     else:
-    #         raise NotImplementedError(f"Unsupported unary operator: {type(node.op)}")
+        elif isinstance(node.op, ast.UAdd):
+            # プラス (+) の処理（中身をそのまま評価するだけでOK）
+            self.visit(node.operand)
+        elif isinstance(node.op, ast.Not):
+            # 否定 (not) の処理（OP_NOT 命令を使うなど）
+            self.visit(node.operand)
+            self.code.append(OP_NOT)
+        else:
+            raise NotImplementedError(f"Unsupported unary operator: {type(node.op)}")
 
     # # 二項演算の処理
     # def visit_BinOp(self, node):
@@ -336,42 +300,35 @@ class BytecodeCompiler(ast.NodeVisitor):
     #     else:
     #         raise NotImplementedError(f"Unsupported binary operator: {type(node.op)}")
 
-    # def visit_BoolOp(self, node):
-    #     # 左辺を評価
-    #     left = self.visit(node.values[0])  # 左辺を評価
-    #     self.LD_CONST_VAL(left, VM_R3)  # R3に保存
+    def visit_BoolOp(self, node):
+        # 左辺を評価
+        self.visit(node.values[0])
 
-    #     # ループで回すのでチェックは左辺だけでOK。右辺は次のループで左辺になる
-    #     for value in node.values[1:]:
-    #         self.code.append(OP_LD)
-    #         self.code.append(VM_R3)  # R3からR0にロード
+        # ループで回すのでチェックは左辺だけでOK。右辺は次のループで左辺になる
+        for value in node.values[1:]:
+            if isinstance(node.op, ast.And):
+                # ANDの場合、左辺が偽なら右辺を評価せずに偽を返す
+                self.code.append(OP_JZ)
+                jump_fixup_pos = len(self.code)
+                self.code.append(ADDR_ERROR)  # 仮のオフセット
 
-    #         if isinstance(node.op, ast.And):
-    #             # ANDの場合、左辺が偽なら右辺を評価せずに偽を返す
-    #             self.code.append(OP_JZ)
-    #             jump_fixup_pos = len(self.code)
-    #             self.code.append(ADDR_ERROR)  # 仮のオフセット
+                self.visit(value)
 
-    #             self.LD_CONST(value)
+                target_pos = len(self.code)
+                self.code[jump_fixup_pos] = min(ADDR_ERROR, target_pos)
+            elif isinstance(node.op, ast.Or):
+                # ORの場合、左辺が真なら右辺を評価せずに真を返す
+                self.code.append(OP_JNZ)
+                jump_fixup_pos = len(self.code)
+                self.code.append(ADDR_ERROR)  # 仮のオフセット
                 
-    #             target_pos = len(self.code)
-    #             self.code[jump_fixup_pos] = min(ADDR_ERROR, target_pos)
-    #         elif isinstance(node.op, ast.Or):
-    #             # ORの場合、左辺が真なら右辺を評価せずに真を返す
-    #             self.code.append(OP_JNZ)
-    #             jump_fixup_pos = len(self.code)
-    #             self.code.append(ADDR_ERROR)  # 仮のオフセット
+                self.visit(value)
                 
-    #             self.LD_CONST(value)
-                
-    #             target_pos = len(self.code)
-    #             self.code[jump_fixup_pos] = min(ADDR_ERROR, target_pos)
-    #         else:
-    #             raise NotImplementedError(f"Unsupported boolean operator: {type(node.op)}")
+                target_pos = len(self.code)
+                self.code[jump_fixup_pos] = min(ADDR_ERROR, target_pos)
+            else:
+                raise NotImplementedError(f"Unsupported boolean operator: {type(node.op)}")
 
-    #         # 右辺(R0)をR3に保存して次の比較に備える
-    #         self.code.append(OP_ST)
-    #         self.code.append(VM_R3)  # R3に保存
 
 # 使用例
 arg_parser = argparse.ArgumentParser(description="Compile Python code to bytecode for a simple VM.")
