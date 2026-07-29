@@ -43,6 +43,7 @@ public struct swiftVMLib {
             ptr[sp] = value
             ptr[ADDR_SP] = UInt16(sp - 1)
         }
+
         public mutating func pop() -> UInt16 {
             let sp = Int(ptr[ADDR_SP])
             assert(sp <= ADDR_STACK, "Stack overflow")
@@ -61,9 +62,12 @@ public struct swiftVMLib {
         self.code = CodeMemory(address: codeAddress)
         self.mem = WorkMemory(address: memAddress)
     }
+
     public func result() -> Int {
+        // メモリ[0] やスタックトップなど、仕様に合わせて調整（例として mem[0] を返す）
         return Int(self.mem[0])
     }
+
     public func getPC() -> Int {
         return self.pc
     }
@@ -75,7 +79,7 @@ public struct swiftVMLib {
 
         switch op {
         case OP_HALT:
-            self.pc -= 1  // HALT命令の後はPCを戻す(HALTはpcを進めない)
+            self.pc -= 1  // HALT命令の後はPCを戻す
             return true
         case OP_LDC:
             LDC()
@@ -83,16 +87,7 @@ public struct swiftVMLib {
             LD()
         case OP_ST:
             ST()
-        case OP_STA:
-            STA()
-        case OP_PUSH:
-            PUSH()
-        case OP_POP:
-            POP()
         case OP_JMP:
-            assert(
-                self.pc == self.code[self.pc],
-                "Jump address must be equal to the current program counter")
             self.pc = Int(self.code[self.pc])
         case OP_JZ:
             JZ()
@@ -127,130 +122,154 @@ public struct swiftVMLib {
         return false
     }
 
+    // MARK: - 命令の実装（スタックマシン版）
+
     public mutating func LDC() {
-        // LDC命令の実装
         let lower = self.code[self.pc]
         self.pc += 1
         let upper = self.code[self.pc]
         self.pc += 1
         let value = UInt16(upper) << 8 | UInt16(lower)
-        self.mem[0] = value
-        print("LDC R0 = \(value)")
+
+        // 定数を評価スタックにプッシュ
+        self.mem.push(value: value)
+        print("LDC pushed \(value)")
     }
 
     public mutating func LD() {
-        // LD命令の実装
-        let addr = self.code[self.pc]
-        self.pc += 1
-        self.mem[0] = self.mem[Int(addr)]
-        print("LD R0 = VM[\(addr)](\(self.mem[Int(addr)]))")
-    }
-    public mutating func ST() {
-        // ST命令の実装
-        let addr = self.code[self.pc]
-        self.pc += 1
-        self.mem[Int(addr)] = self.mem[0]
-        print("ST VM[\(addr)] = R0(\(self.mem[0]))")
-    }
-    public mutating func STA() {
-        // STA命令の実装
-        let index = Int(self.code[self.pc])
-        self.pc += 1
-        let addr = self.mem[index]  // R1に格納されたアドレスを取得
-        self.mem[Int(addr)] = self.mem[0]
-        print("STA VM[VM[\(addr)]] = R0(\(self.mem[0]))")
+        // スタックトップからメモリアドレスを取り出し、その番地の値をロードして再びプッシュ
+        let addr = self.mem.pop()
+        let value = self.mem[Int(addr)]
+        self.mem.push(value: value)
+        print("LD: loaded VM[\(addr)] = \(value) to stack")
     }
 
-    public mutating func PUSH() {
-        // PUSH命令の実装
-        self.mem.push(value: self.mem[0])
-        print("PUSH R0(\(self.mem[0])) to stack")
-    }
-    public mutating func POP() {
-        // POP命令の実装
-        self.mem[0] = self.mem.pop()
-        print("POP from stack to R0(\(self.mem[0]))")
+    public mutating func ST() {
+        // スタックから [アドレス, 値] の順でポップしてメモリにストア
+        // ※コンパイラの生成順序（値 -> アドレス の順で積む想定）に合わせてポップ
+        let addr = self.mem.pop()
+        let value = self.mem.pop()
+        self.mem[Int(addr)] = value
+        print("ST: VM[\(addr)] = \(value)")
     }
 
     public mutating func JZ() {
-        // JZ命令の実装
         let addr = self.code[self.pc]
         self.pc += 1
-        if self.mem[0] == 0 {
+        // 条件値はスタックからポップして判定
+        let cond = self.mem.pop()
+        if cond == 0 {
             self.pc = Int(addr)
         }
-        print("JZ: R0 == 0, jumping to \(addr)")
+        print("JZ: condition == 0, jumping to \(addr)")
     }
+
     public mutating func JNZ() {
-        // JNZ命令の実装
         let addr = self.code[self.pc]
         self.pc += 1
-        if self.mem[0] != 0 {
+        let cond = self.mem.pop()
+        if cond != 0 {
             self.pc = Int(addr)
         }
-        print("JNZ: R0 != 0, jumping to \(addr)")
+        print("JNZ: condition != 0, jumping to \(addr)")
     }
 
     public mutating func CMP() {
         let subcode = Int(self.code[self.pc])
         self.pc += 1
 
+        // スタックから右辺、左辺の順にポップする（LIFOなので後から積んだ右辺が先に出る）
+        let right = self.mem.pop()
+        let left = self.mem.pop()
+
+        let result: UInt16
         switch subcode {
-        case CMP_EQ:
-            self.mem[0] = (self.mem[0] == self.mem[1]) ? 1 : 0
-        case CMP_NE:
-            self.mem[0] = (self.mem[0] != self.mem[1]) ? 1 : 0
-        case CMP_LT:
-            self.mem[0] = (self.mem[0] < self.mem[1]) ? 1 : 0
-        case CMP_LE:
-            self.mem[0] = (self.mem[0] <= self.mem[1]) ? 1 : 0
-        case CMP_GT:
-            self.mem[0] = (self.mem[0] > self.mem[1]) ? 1 : 0
-        case CMP_GE:
-            self.mem[0] = (self.mem[0] >= self.mem[1]) ? 1 : 0
+        case CMP_EQ: result = (left == right) ? 1 : 0
+        case CMP_NE: result = (left != right) ? 1 : 0
+        case CMP_LT: result = (left < right) ? 1 : 0
+        case CMP_LE: result = (left <= right) ? 1 : 0
+        case CMP_GT: result = (left > right) ? 1 : 0
+        case CMP_GE: result = (left >= right) ? 1 : 0
         default:
             assert(false, "Unknown comparison subcode: \(subcode)")
+            result = 0
         }
 
-        print("CMP R0 = \(self.mem[0]) (comparison result)")
+        // 比較結果をスタックにプッシュ
+        self.mem.push(value: result)
+        print("CMP result \(result) pushed to stack")
     }
 
     public mutating func NOT() {
-        print("NOT: R0 = !\(self.mem[0])")
-        self.mem[0] = (self.mem[0] != 0) ? 1 : 0
+        let val = self.mem.pop()
+        let result: UInt16 = (val != 0) ? 0 : 1
+        self.mem.push(value: result)
+        print("NOT: !\(val) = \(result)")
     }
+
     public mutating func ADD() {
-        print("ADD: R0 = \(self.mem[0]) + R1 = \(self.mem[1])")
-        self.mem[0] = self.mem[0] &+ self.mem[1]  // Use wrapping addition to handle overflow
+        let right = self.mem.pop()
+        let left = self.mem.pop()
+        let result = left &+ right
+        self.mem.push(value: result)
+        print("ADD: \(left) + \(right) = \(result)")
     }
+
     public mutating func SUB() {
-        print("SUB: R0 = \(self.mem[0]) - R1 = \(self.mem[1])")
-        self.mem[0] = self.mem[0] &- self.mem[1]  // Use wrapping subtraction to handle underflow
+        let right = self.mem.pop()
+        let left = self.mem.pop()
+        let result = left &- right
+        self.mem.push(value: result)
+        print("SUB: \(left) - \(right) = \(result)")
     }
+
     public mutating func MUL() {
-        print("MUL: R0 = \(self.mem[0]) * R1 = \(self.mem[1])")
-        self.mem[0] = self.mem[0] &* self.mem[1]  // Use wrapping multiplication to handle overflow
+        let right = self.mem.pop()
+        let left = self.mem.pop()
+        let result = left &* right
+        self.mem.push(value: result)
+        print("MUL: \(left) * \(right) = \(result)")
     }
+
     public mutating func DIV() {
-        print("DIV: R0 = \(self.mem[0]) / R1 = \(self.mem[1])")
-        assert(self.mem[1] != 0, "Division by zero")
-        self.mem[0] = self.mem[0] / self.mem[1]
+        let right = self.mem.pop()
+        let left = self.mem.pop()
+        assert(right != 0, "Division by zero")
+        let result = left / right
+        self.mem.push(value: result)
+        print("DIV: \(left) / \(right) = \(result)")
     }
+
     public mutating func MOD() {
-        print("MOD: R0 = \(self.mem[0]) % R1 = \(self.mem[1])")
-        assert(self.mem[1] != 0, "Modulo by zero")
-        self.mem[0] = self.mem[0] % self.mem[1]
+        let right = self.mem.pop()
+        let left = self.mem.pop()
+        assert(right != 0, "Modulo by zero")
+        let result = left % right
+        self.mem.push(value: result)
+        print("MOD: \(left) % \(right) = \(result)")
     }
+
     public mutating func AND() {
-        print("AND: R0 = \(self.mem[0]) & R1 = \(self.mem[1])")
-        self.mem[0] = self.mem[0] & self.mem[1]
+        let right = self.mem.pop()
+        let left = self.mem.pop()
+        let result = left & right
+        self.mem.push(value: result)
+        print("AND: \(left) & \(right) = \(result)")
     }
+
     public mutating func OR() {
-        print("OR: R0 = \(self.mem[0]) | R1 = \(self.mem[1])")
-        self.mem[0] = self.mem[0] | self.mem[1]
+        let right = self.mem.pop()
+        let left = self.mem.pop()
+        let result = left | right
+        self.mem.push(value: result)
+        print("OR: \(left) | \(right) = \(result)")
     }
+
     public mutating func XOR() {
-        print("XOR: R0 = \(self.mem[0]) ^ R1 = \(self.mem[1])")
-        self.mem[0] = self.mem[0] ^ self.mem[1]
+        let right = self.mem.pop()
+        let left = self.mem.pop()
+        let result = left ^ right
+        self.mem.push(value: result)
+        print("XOR: \(left) ^ \(right) = \(result)")
     }
 }
