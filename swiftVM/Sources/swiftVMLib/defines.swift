@@ -9,11 +9,11 @@ let OP_DUP = 0x05  // Duplicate the top value of the stack
 let OP_DEL = 0x06  // Pop from stack and discard
 let OP_JMP = 0x10  // Jump
 let OP_JZ = 0x11  // Jump if Zero (R0 == 0)
-let OP_JNZ = 0x12  // Jump if Not Zero (R0 != 0)
 let OP_CMP = 0x20  // R0とR1を比較してR0に 0 or 1 で結果を格納。比較演算はSubコードで指定する。
 let OP_AND = 0x21  // R0 = R0 & R1
 let OP_OR = 0x22  // R0 = R0 | R1
 let OP_XOR = 0x23  // R0 = R0 ^ R1
+let OP_NOT = 0x24  // スタックトップの値を(0なら1、0以外なら0)に変換
 let OP_ADD = 0x30  // R0 = R0 + R1
 let OP_SUB = 0x31  // R0 = R0 - R1
 let OP_MUL = 0x32  // R0 = R0 * R1

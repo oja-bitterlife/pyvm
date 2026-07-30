@@ -148,10 +148,16 @@ public struct swiftVMLib {
             self.JMP()
         case OP_JZ:
             self.JZ()
-        case OP_JNZ:
-            self.JNZ()
         case OP_CMP:
             self.CMP()
+        case OP_AND:
+            self.AND()
+        case OP_OR:
+            self.OR()
+        case OP_XOR:
+            self.XOR()
+        case OP_NOT:
+            self.NOT()
         case OP_ADD:
             self.ADD()
         case OP_SUB:
@@ -162,13 +168,6 @@ public struct swiftVMLib {
             self.DIV()
         case OP_MOD:
             self.MOD()
-        case OP_AND:
-            self.AND()
-        case OP_OR:
-            self.OR()
-        case OP_XOR:
-            self.XOR()
-
         default:
             assert(false, "Unknown opcode(pc:\(self.pc-1)): \(op)")
         }
@@ -243,16 +242,11 @@ public struct swiftVMLib {
         }
     }
     @inline(__always)
-    public mutating func JNZ() {
-        let addr = self.code[self.pc]
-        self.pc += 1
-        let cond = self.stack.pop()
-        if cond != 0 {
-            self.op_trace("JNZ \(cond): jump to \(addr) : continue")
-            self.pc = Int(addr)
-        } else {
-            self.op_trace("JNZ \(cond): pass")
-        }
+    public mutating func NOT() {
+        let value = self.stack.pop()
+        let result: UInt16 = (value == 0) ? 1 : 0
+        self.stack.push(value: result)
+        self.op_trace("NOT \(value) => \(result)")
     }
 
     @inline(__always)
