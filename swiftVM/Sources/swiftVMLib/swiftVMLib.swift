@@ -196,7 +196,7 @@ public struct swiftVMLib {
     }
     @inline(__always)
     public mutating func PUSHW() {
-        let value = UInt16(self.code[self.pc]) << 8 | UInt16(self.code[self.pc + 1])
+        let value = UInt16(self.code[self.pc + 1]) << 8 | UInt16(self.code[self.pc])
         self.pc += 2
         self.stack.push(value: value)
         self.op_trace("PUSHW \(value)")
@@ -220,9 +220,11 @@ public struct swiftVMLib {
         self.pc += 1
         // 条件値はスタックからポップして判定
         let cond = self.stack.pop()
-        self.op_trace("JZ \(cond) == 0 ? jump to \(addr) : continue")
         if cond == 0 {
+            self.op_trace("JZ \(cond): jump to \(addr) : continue")
             self.pc = Int(addr)
+        } else {
+            self.op_trace("JZ \(cond): pass")
         }
     }
     @inline(__always)
@@ -230,9 +232,11 @@ public struct swiftVMLib {
         let addr = self.code[self.pc]
         self.pc += 1
         let cond = self.stack.pop()
-        self.op_trace("JNZ \(cond) != 0 ? jump to \(addr) : continue")
         if cond != 0 {
+            self.op_trace("JNZ \(cond): jump to \(addr) : continue")
             self.pc = Int(addr)
+        } else {
+            self.op_trace("JNZ \(cond): pass")
         }
     }
 
@@ -261,7 +265,10 @@ public struct swiftVMLib {
         // 比較結果をスタックにプッシュ
         self.stack.push(value: result)
 
-        self.op_trace("CMP \(left) [\(subcode)] \(right) = \(result)")
+        #if DEBUG
+            let subcodes = ["==", "!=", "<", "<=", ">", ">="]
+            self.op_trace("CMP \(left) \(subcodes[subcode]) \(right) = \(result)")
+        #endif
     }
 
     @inline(__always)

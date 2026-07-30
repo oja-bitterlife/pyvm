@@ -1,10 +1,7 @@
 from vm import *
 
 def main():
-    # VM[VM_EVENT] = 1234 < 4567
-    # return VM[VM_EVENT]
-    VM[VM_EVENT] = EVENT_KEY | 3
-    return VM[VM_EVENT]
+    return 1234 < 4567 < 8901
     # VM[VM_SELECT_NO] = 2
     # if VM[VM_EVENT] == EVENT_KEY_A or VM[VM_EVENT] == EVENT_KEY_START:
     #     match VM[VM_SELECT_NO]:

@@ -182,6 +182,30 @@ class BytecodeCompiler(ast.NodeVisitor):
         target_pos = len(self.code)
         self.code[jump_fixup_pos] = min(ADDR_ERROR, target_pos)
 
+    def visit_BoolOp(self, node):
+        # 現在は ast.And のみを想定
+        if isinstance(node.op, ast.And):
+            short_circuit_patches = []
+            
+            for i, value in enumerate(node.values):
+                # 各要素を評価する
+                self.visit(value)
+                
+                # 最後の要素以外の場合、結果が 0 (偽) なら短絡ジャンプする
+                if i < len(node.values) - 1:
+                    self.code.append(OP_JZ)
+                    patch_pos = len(self.code)
+                    self.code.append(ADDR_ERROR)
+                    short_circuit_patches.append(patch_pos)
+            
+            # すべての比較が通過した場合、あるいは途中で短絡したときのジャンプ先をパッチ
+            end_pos = len(self.code)
+            for patch_pos in short_circuit_patches:
+                self.code[patch_pos] = min(ADDR_ERROR, end_pos)
+        else:
+            raise NotImplementedError(f"Unsupported boolean operator: {type(node.op)}")
+
+
 
 # 使用例
 arg_parser = argparse.ArgumentParser(description="Compile Python code to stack-machine bytecode.")
