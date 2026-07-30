@@ -1,3 +1,5 @@
+from platform import node
+
 from assets.vm import *
 import argparse
 import ast
@@ -176,35 +178,35 @@ class BytecodeCompiler(ast.NodeVisitor):
         jump_fixup_pos = len(self.code)
         self.code.append(ADDR_ERROR)
 
+        # if 文の本体
         for stmt in node.body:
             self.visit(stmt)
-            
+
+        # if文の本体が終わったら、ジャンプ先を修正する
         target_pos = len(self.code)
         self.code[jump_fixup_pos] = min(ADDR_ERROR, target_pos)
 
     def visit_BoolOp(self, node):
-        # 現在は ast.And のみを想定
+        # 複数の比較が含まれている場合は、and/or のツリーに変換して再帰的に処理する
         if isinstance(node.op, ast.And):
-            short_circuit_patches = []
-            
-            for i, value in enumerate(node.values):
-                # 各要素を評価する
+            # 左辺の値を評価
+            self.visit(node.values[0])
+
+            # 右辺の値を順に評価
+            for value in node.values[1:]:
                 self.visit(value)
-                
-                # 最後の要素以外の場合、結果が 0 (偽) なら短絡ジャンプする
-                if i < len(node.values) - 1:
-                    self.code.append(OP_JZ)
-                    patch_pos = len(self.code)
-                    self.code.append(ADDR_ERROR)
-                    short_circuit_patches.append(patch_pos)
-            
-            # すべての比較が通過した場合、あるいは途中で短絡したときのジャンプ先をパッチ
-            end_pos = len(self.code)
-            for patch_pos in short_circuit_patches:
-                self.code[patch_pos] = min(ADDR_ERROR, end_pos)
+                self.code.append(OP_AND)
+
+        elif isinstance(node.op, ast.Or):
+            # 左辺の値を評価
+            self.visit(node.values[0])
+
+            # 右辺の値を順に評価
+            for value in node.values[1:]:
+                self.visit(value)
+                self.code.append(OP_OR)
         else:
             raise NotImplementedError(f"Unsupported boolean operator: {type(node.op)}")
-
 
 
 # 使用例
