@@ -10,6 +10,8 @@ OP_PUSHA    = 0x01  # スタックにVM[<address>] をプッシュ
 OP_PUSHB    = 0x02  # スタックにByteをプッシュ
 OP_PUSHW    = 0x03  # スタックにWordをプッシュ
 OP_POPA     = 0x04  # スタックからVM[<address>] にポップ
+OP_DUP      = 0x05  # スタックトップの値を複製して積む
+OP_DEL      = 0x06  # スタックから値をポップして破棄
 OP_JMP      = 0x10
 OP_JZ       = 0x11
 OP_JNZ      = 0x12
@@ -220,28 +222,46 @@ class BytecodeCompiler(ast.NodeVisitor):
     def visit_Match(self, node):
         # match 文の対象となる値を評価してスタックに積む
         self.visit(node.subject)
+        break_jumps = []  # 複数の case の本体が終わった後にジャンプするためのアドレスを保持するリスト
 
         # 各 case の処理
         for case in node.cases:
+            # case _: のときは無条件で case の本体を評価する
+            if isinstance(case.pattern, ast.MatchAs) and case.pattern.name is None and case.pattern.pattern is None:
+                # case _ の本体を評価
+                for stmt in case.body:
+                    self.visit(stmt)
+                break
+
+            # スタックトップの値を複製して積む (対象値を保持するため)
+            self.code.append(OP_DUP)
+
             # case のパターンを評価してスタックに積む
             self.visit(case.pattern)
 
             # スタックから [対象値, パターン値] をポップして比較し、結果をスタックに積む
-            self.code.append(OP_CMP)
-            self.code.append(CMP_EQ)
+            self.code.extend([OP_CMP, CMP_EQ])
 
             # 比較結果が 0 (False) なら次の case にジャンプする
-            self.code.append(OP_JZ)
-            jump_fixup_pos = len(self.code)
-            self.code.append(ADDR_ERROR)
+            next_case_jump_pos = len(self.code)
+            self.code.extend([OP_JZ, ADDR_ERROR])  # 仮のジャンプ先をセット
 
             # case の本体を評価
             for stmt in case.body:
                 self.visit(stmt)
 
-            # case の本体が終わったら、ジャンプ先を修正する
-            target_pos = len(self.code)
-            self.code[jump_fixup_pos] = min(ADDR_ERROR, target_pos)
+            # case の本体が終わったらbreak 用のジャンプを追加
+            break_jumps.append(len(self.code))
+            self.code.extend([OP_JMP, ADDR_ERROR])  # 仮のジャンプ先をセット
+
+            self.code[next_case_jump_pos + 1] = len(self.code)
+
+        # case の本体が終わったら、ジャンプ先を修正する
+        for pos in break_jumps:
+            self.code[pos + 1] = len(self.code)
+
+        self.code.append(OP_DEL)  # スタックから対象値をポップして破棄
+
 
     def visit_MatchValue(self, node):
         # match 文の case のパターン値を評価してスタックに積む
@@ -252,11 +272,21 @@ class BytecodeCompiler(ast.NodeVisitor):
         if node.name is not None:
             # 変数名が指定されている場合は、その変数に値を代入する
             self.visit(node.pattern)
-            self.code.append(OP_POPA)
-            self.code.append(globals()[node.name])
+            self.code.extend([OP_POPA, globals()[node.name]])
         else:
             # 変数名が指定されていない場合は、単純にパターン値を評価する
             self.visit(node.pattern)
+
+    def visit_UnaryOp(self, node):
+        # 右辺を先に評価 (スタックに積まれる)
+        self.visit(node.operand)
+
+        # 演算子に応じたバイトコードを付与
+        if isinstance(node.op, ast.USub):
+            self.code.extend([OP_PUSHB, 0, OP_SUB])  # 0 - operand
+        else:
+            raise NotImplementedError(f"Unsupported unary operator: {type(node.op)}")
+
 
 
 # 使用例

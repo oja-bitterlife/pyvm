@@ -5,6 +5,8 @@ let OP_PUSHA = 0x01  // Push VM[<address>] onto the stack
 let OP_PUSHB = 0x02  // Push byte onto the stack
 let OP_PUSHW = 0x03  // Push word onto the stack
 let OP_POPA = 0x04  // Pop from stack into VM[<address>]
+let OP_DUP = 0x05  // Duplicate the top value of the stack
+let OP_DEL = 0x06  // Pop from stack and discard
 let OP_JMP = 0x10  // Jump
 let OP_JZ = 0x11  // Jump if Zero (R0 == 0)
 let OP_JNZ = 0x12  // Jump if Not Zero (R0 != 0)

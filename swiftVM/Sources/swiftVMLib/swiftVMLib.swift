@@ -140,6 +140,10 @@ public struct swiftVMLib {
             self.PUSHW()
         case OP_POPA:
             self.POPA()
+        case OP_DUP:
+            self.DUP()
+        case OP_DEL:
+            self.DEL()
         case OP_JMP:
             self.JMP()
         case OP_JZ:
@@ -208,6 +212,17 @@ public struct swiftVMLib {
         self.mem[Int(addr)] = value
         self.op_trace("POPA VM[\(Int(addr))] <= \(value)")
     }
+    @inline(__always)
+    public mutating func DUP() {
+        let value = self.stack.peek()
+        self.stack.push(value: value)
+        self.op_trace("DUP \(value)")
+    }
+    @inline(__always)
+    public mutating func DEL() {
+        let value = self.stack.pop()
+        self.op_trace("DEL \(value)")
+    }
 
     @inline(__always)
     public mutating func JMP() {
@@ -273,24 +288,24 @@ public struct swiftVMLib {
 
     @inline(__always)
     public mutating func AND() {
-        let right = self.stack.pop()
         let left = self.stack.pop()
+        let right = self.stack.pop()
         let result = left & right
         self.stack.push(value: result)
         self.op_trace("AND \(left) & \(right) = \(result)")
     }
     @inline(__always)
     public mutating func OR() {
-        let right = self.stack.pop()
         let left = self.stack.pop()
+        let right = self.stack.pop()
         let result = left | right
         self.stack.push(value: result)
         self.op_trace("OR \(left) | \(right) = \(result)")
     }
     @inline(__always)
     public mutating func XOR() {
-        let right = self.stack.pop()
         let left = self.stack.pop()
+        let right = self.stack.pop()
         let result = left ^ right
         self.stack.push(value: result)
         self.op_trace("XOR \(left) ^ \(right) = \(result)")
@@ -298,32 +313,32 @@ public struct swiftVMLib {
 
     @inline(__always)
     public mutating func ADD() {
-        let right = self.stack.pop()
         let left = self.stack.pop()
+        let right = self.stack.pop()
         let result = left &+ right
         self.stack.push(value: result)
         self.op_trace("ADD \(left) + \(right) = \(result)")
     }
     @inline(__always)
     public mutating func SUB() {
-        let right = self.stack.pop()
         let left = self.stack.pop()
+        let right = self.stack.pop()
         let result = left &- right
         self.stack.push(value: result)
         self.op_trace("SUB \(left) - \(right) = \(result)")
     }
     @inline(__always)
     public mutating func MUL() {
-        let right = self.stack.pop()
         let left = self.stack.pop()
+        let right = self.stack.pop()
         let result = left &* right
         self.stack.push(value: result)
         self.op_trace("MUL \(left) * \(right) = \(result)")
     }
     @inline(__always)
     public mutating func DIV() {
-        let right = self.stack.pop()
         let left = self.stack.pop()
+        let right = self.stack.pop()
         assert(right != 0, "Division by zero")
         let result = left / right
         self.stack.push(value: result)
@@ -331,8 +346,8 @@ public struct swiftVMLib {
     }
     @inline(__always)
     public mutating func MOD() {
-        let right = self.stack.pop()
         let left = self.stack.pop()
+        let right = self.stack.pop()
         assert(right != 0, "Modulo by zero")
         let result = left % right
         self.stack.push(value: result)
