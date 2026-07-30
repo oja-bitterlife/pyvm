@@ -4,9 +4,10 @@ import ast
 
 # スタックマシン用のオペコード
 OP_HALT     = 0x00  # 終了
-OP_LDC      = 0x01  # 定数(word:2byte)をスタックにプッシュ
-OP_LD       = 0x02  # VM[スタックトップ] の値をロードしてスタックにプッシュ
-OP_ST       = 0x03  # スタックから [アドレス, 値] をポップして VM[アドレス] = 値
+OP_PUSHA    = 0x01  # スタックにVM[<address>] をプッシュ
+OP_PUSHB    = 0x02  # スタックにByteをプッシュ
+OP_PUSHW    = 0x03  # スタックにWordをプッシュ
+OP_POPA     = 0x04  # スタックからVM[<address>] にポップ
 OP_JMP      = 0x10
 OP_JZ       = 0x11
 OP_JNZ      = 0x12
@@ -52,8 +53,7 @@ class BytecodeCompiler(ast.NodeVisitor):
     def visit_Return(self, node):
         if node.value is None:
             # 何もなければ0をプッシュして終了
-            self.code.append(OP_LDC)
-            self.code.append(0)
+            self.code.append(OP_PUSHB)
             self.code.append(0)
         else:
             self.visit(node.value)
@@ -61,13 +61,13 @@ class BytecodeCompiler(ast.NodeVisitor):
 
     def visit_Constant(self, node):
         val = int(node.value)
-        self.code.append(OP_LDC)
+        self.code.append(OP_PUSHW)
         self.code.append(val & 0xFF)
         self.code.append((val >> 8) & 0xFF)
 
     def visit_Name(self, node):
         val = globals().get(node.id)
-        self.code.append(OP_LDC)
+        self.code.append(OP_PUSHW)
         self.code.append(val & 0xFF)
         self.code.append((val >> 8) & 0xFF)
 
@@ -75,33 +75,32 @@ class BytecodeCompiler(ast.NodeVisitor):
     def visit_Subscript(self, node):
         if not isinstance(node.value, ast.Name) or node.value.id != 'VM':
             raise NotImplementedError("Only VM[] subscript is supported.")
+
         # インデックスを評価してスタックに積む
         self.visit(node.slice)
-        # スタックトップのインデックスに対応するメモリ値をロード
-        self.code.append(OP_LD)
 
-    # 代入文: VM[index] = value
+        # スタックトップのインデックスに対応するメモリ値をロード
+        self.code.append(OP_PUSHA)
+
+    # 代入文: VM[<address>] = value
     def visit_Assign(self, node):
         if not isinstance(node.targets[0], ast.Subscript) or not isinstance(node.targets[0].value, ast.Name) or node.targets[0].value.id != 'VM':
             raise NotImplementedError("Only assignment to VM[] is supported.")
 
-        # 1. 右辺の値を評価してスタックに積む
+        # 右辺の値を評価してスタックに積む
         self.visit(node.value)
         
-        # 2. 左辺のインデックスを評価してスタックに積む
-        # （スタックの状態： [..., value, index] となるようにする）
+        # 左辺のaddressをスタックに積んでVM[<address>] にポップ
         self.visit(node.targets[0].slice)
-
-        # 3. ストア命令を実行（スタックから index と value を取り出して書き込み）
-        self.code.append(OP_ST)
+        self.code.append(OP_POPA)
 
     def visit_BinOp(self, node):
-        # 1. 右辺を先に評価 (スタックに積まれる)
+        # 右辺を先に評価 (スタックに積まれる)
         self.visit(node.right)
-        # 2. 左辺を後から評価 (スタックに積まれる)
+        # 左辺を後から評価 (スタックに積まれる)
         self.visit(node.left)
 
-        # 3. 演算子に応じたバイトコードを付与
+        # 演算子に応じたバイトコードを付与
         # （VM側でスタックから [左辺, 右辺] をポップして計算し、結果をプッシュする）
         if isinstance(node.op, ast.BitAnd):
             self.code.append(OP_AND)
