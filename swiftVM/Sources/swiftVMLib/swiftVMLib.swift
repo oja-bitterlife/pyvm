@@ -2,11 +2,8 @@
 
 /// デバッグビルド時のみコンパイル・実行されるprint関数
 @inlinable
-public func dprint(
-    _ items: Any...,
-    separator: String = " ",
-    terminator: String = "\n"
-) {
+@inline(__always)
+public func dprint(_ items: Any..., separator: String = " ", terminator: String = "\n") {
     #if DEBUG
         let output = items.map { "\($0)" }.joined(separator: separator)
         Swift.print(output, terminator: terminator)
@@ -94,9 +91,12 @@ public struct swiftVMLib {
     }
 
     /// デバッグビルド時のみOPコードの実行をトレースする関数
-    @inlinable
+    @inline(__always)
     public func op_trace(_ items: Any..., separator: String = " ", terminator: String = "\n") {
-        dprint(items, separator: separator, terminator: terminator)
+        #if DEBUG
+            let output = items.map { "\($0)" }.joined(separator: separator)
+            Swift.print(output, terminator: terminator)
+        #endif
     }
 
     // MARK: - VM本体のプロパティ
@@ -125,7 +125,7 @@ public struct swiftVMLib {
 
     public mutating func step() -> Bool {
         let op = Int(self.code[self.pc])
-        self.op_trace("PC: \(self.pc)", terminator: " ")
+        self.op_trace("\(self.pc):", terminator: " ")
         self.pc += 1
 
         switch op {
