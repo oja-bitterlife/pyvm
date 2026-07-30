@@ -286,9 +286,14 @@ class BytecodeCompiler(ast.NodeVisitor):
         # 演算子に応じたバイトコードを付与
         if isinstance(node.op, ast.USub):
             self.code.extend([OP_PUSHB, 0, OP_SUB])  # 0 - operand
+        elif isinstance(node.op, ast.Invert):
+            self.code.extend([OP_PUSHW, 0xFF, 0xFF, OP_XOR])  # ビット反転 (XOR 0xFF)
+        elif isinstance(node.op, ast.Not):
+            self.code.extend([OP_PUSHB, 0, OP_CMP, CMP_EQ])  # 論理否定 (0なら1、0以外なら0)
+        elif isinstance(node.op, ast.UAdd):
+            pass  # 単項プラスは何もしない
         else:
             raise NotImplementedError(f"Unsupported unary operator: {type(node.op)}")
-
 
 
 # 使用例
