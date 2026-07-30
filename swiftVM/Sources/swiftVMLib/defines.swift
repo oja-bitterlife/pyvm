@@ -1,12 +1,10 @@
 let ADDR_ERROR = 0xFF
 
-let VM_SP = 200  // スタックポインタアドレス(=スタックボトム)
-let VM_STACK_SIZE = ADDR_ERROR - VM_SP - 1  // スタックサイズ
-
 let OP_HALT = 0x00
-let OP_LDC = 0x01  // Load (R0) Constant(word)
-let OP_LD = 0x02  // Load (R0) from memory
-let OP_ST = 0x03  // Store (R0) to memory
+let OP_PUSHA = 0x01  // Push VM[<address>] onto the stack
+let OP_PUSHB = 0x02  // Push byte onto the stack
+let OP_PUSHW = 0x03  // Push word onto the stack
+let OP_POPA = 0x04  // Pop from stack into VM[<address>]
 let OP_JMP = 0x10  // Jump
 let OP_JZ = 0x11  // Jump if Zero (R0 == 0)
 let OP_JNZ = 0x12  // Jump if Not Zero (R0 != 0)

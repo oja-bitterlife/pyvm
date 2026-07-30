@@ -8,11 +8,7 @@ let filePath = "../assets/test.bin"
 @main
 struct swiftVM {
     static func main() {
-
-        // 1. 仮実行用に、Swiftの管理下でメモリ領域（配列）を確保する
-        var rawMem = [UInt16](repeating: 0, count: 256)
-        //        let rawCode = [UInt8](repeating: 0, count: 256)  // 適当なバイトコードの初期値
-        // 2. バイトコードをファイルから読み込む
+        // メモリ確保
         let rawCode: [UInt8]
         do {
             rawCode = try Data(contentsOf: URL(fileURLWithPath: filePath)).map { $0 }
@@ -20,11 +16,22 @@ struct swiftVM {
             print("Error reading file: \(error)")
             return
         }
+        var rawMem = [UInt16](repeating: 0, count: 256)
+        var stackMem = [UInt16](repeating: 0, count: 256)
 
+        // メモリアドレスの取得
+        let codeAddr = UInt(UInt(bitPattern: rawCode.withUnsafeBufferPointer { $0.baseAddress }))
         let memAddr = UInt(
             UInt(bitPattern: rawMem.withUnsafeMutableBufferPointer { $0.baseAddress }))
-        let codeAddr = UInt(UInt(bitPattern: rawCode.withUnsafeBufferPointer { $0.baseAddress }))
-        var vm = swiftVMLib(codeAddress: codeAddr, memAddress: memAddr, memSize: rawMem.count)
+        let stackAddr = UInt(
+            UInt(bitPattern: stackMem.withUnsafeMutableBufferPointer { $0.baseAddress }))
+
+        // VMの初期化
+        var vm = swiftVMLib(
+            codeAddress: codeAddr,
+            stackAddress: stackAddr, stackSize: stackMem.count,
+            memAddress: memAddr, memSize: rawMem.count
+        )
 
         while true {
             let shouldHalt = vm.step()
