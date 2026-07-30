@@ -93,6 +93,12 @@ public struct swiftVMLib {
         }
     }
 
+    /// デバッグビルド時のみOPコードの実行をトレースする関数
+    @inlinable
+    public func op_trace(_ items: Any..., separator: String = " ", terminator: String = "\n") {
+        dprint(items, separator: separator, terminator: terminator)
+    }
+
     // MARK: - VM本体のプロパティ
     public let code: CodeMemory
     public var mem: WorkMemory
@@ -119,7 +125,7 @@ public struct swiftVMLib {
 
     public mutating func step() -> Bool {
         let op = Int(self.code[self.pc])
-        dprint("PC: \(self.pc)", terminator: " ")
+        self.op_trace("PC: \(self.pc)", terminator: " ")
         self.pc += 1
 
         switch op {
@@ -163,8 +169,6 @@ public struct swiftVMLib {
             assert(false, "Unknown opcode(pc:\(self.pc-1)): \(op)")
         }
 
-        dprint("")
-
         assert(self.pc < 256, "Program counter out of bounds")
         return false
     }
@@ -174,41 +178,41 @@ public struct swiftVMLib {
     @inline(__always)
     public mutating func HALT() {
         self.pc -= 1  // HALT命令の後はPCを戻す
-        dprint("HALT")
+        self.op_trace("HALT")
     }
 
     @inline(__always)
     public mutating func PUSHA() {
         let addr = self.stack.pop()
         self.stack.push(value: self.mem[Int(addr)])
-        dprint("PUSHA \(self.mem[Int(addr)]) in VM[\(Int(addr))]", terminator: " ")
+        self.op_trace("PUSHA \(self.mem[Int(addr)]) in VM[\(Int(addr))]")
     }
     @inline(__always)
     public mutating func PUSHB() {
         let value = self.code[self.pc]
         self.pc += 1
         self.stack.push(value: UInt16(value))
-        dprint("PUSHB \(value)", terminator: " ")
+        self.op_trace("PUSHB \(value)")
     }
     @inline(__always)
     public mutating func PUSHW() {
         let value = UInt16(self.code[self.pc]) << 8 | UInt16(self.code[self.pc + 1])
         self.pc += 2
         self.stack.push(value: value)
-        dprint("PUSHW \(value)", terminator: " ")
+        self.op_trace("PUSHW \(value)")
     }
     @inline(__always)
     public mutating func POPA() {
         let addr = self.stack.pop()
         let value = self.stack.pop()
         self.mem[Int(addr)] = value
-        dprint("POPA VM[\(Int(addr))] <= \(value)", terminator: " ")
+        self.op_trace("POPA VM[\(Int(addr))] <= \(value)")
     }
 
     @inline(__always)
     public mutating func JMP() {
         self.pc = Int(self.code[self.pc])
-        dprint("JMP to \(self.pc)", terminator: " ")
+        self.op_trace("JMP to \(self.pc)")
     }
     @inline(__always)
     public mutating func JZ() {
@@ -216,7 +220,7 @@ public struct swiftVMLib {
         self.pc += 1
         // 条件値はスタックからポップして判定
         let cond = self.stack.pop()
-        dprint("JZ \(cond) == 0 ? jump to \(addr) : continue", terminator: " ")
+        self.op_trace("JZ \(cond) == 0 ? jump to \(addr) : continue")
         if cond == 0 {
             self.pc = Int(addr)
         }
@@ -226,7 +230,7 @@ public struct swiftVMLib {
         let addr = self.code[self.pc]
         self.pc += 1
         let cond = self.stack.pop()
-        dprint("JNZ \(cond) != 0 ? jump to \(addr) : continue", terminator: " ")
+        self.op_trace("JNZ \(cond) != 0 ? jump to \(addr) : continue")
         if cond != 0 {
             self.pc = Int(addr)
         }
@@ -257,7 +261,7 @@ public struct swiftVMLib {
         // 比較結果をスタックにプッシュ
         self.stack.push(value: result)
 
-        dprint("CMP \(left) [\(subcode)] \(right) = \(result)", terminator: " ")
+        self.op_trace("CMP \(left) [\(subcode)] \(right) = \(result)")
     }
 
     @inline(__always)
@@ -266,7 +270,7 @@ public struct swiftVMLib {
         let left = self.stack.pop()
         let result = left & right
         self.stack.push(value: result)
-        dprint("AND \(left) & \(right) = \(result)", terminator: " ")
+        self.op_trace("AND \(left) & \(right) = \(result)")
     }
     @inline(__always)
     public mutating func OR() {
@@ -274,7 +278,7 @@ public struct swiftVMLib {
         let left = self.stack.pop()
         let result = left | right
         self.stack.push(value: result)
-        dprint("OR \(left) | \(right) = \(result)", terminator: " ")
+        self.op_trace("OR \(left) | \(right) = \(result)")
     }
     @inline(__always)
     public mutating func XOR() {
@@ -282,7 +286,7 @@ public struct swiftVMLib {
         let left = self.stack.pop()
         let result = left ^ right
         self.stack.push(value: result)
-        dprint("XOR \(left) ^ \(right) = \(result)", terminator: " ")
+        self.op_trace("XOR \(left) ^ \(right) = \(result)")
     }
 
     @inline(__always)
@@ -291,7 +295,7 @@ public struct swiftVMLib {
         let left = self.stack.pop()
         let result = left &+ right
         self.stack.push(value: result)
-        dprint("ADD \(left) + \(right) = \(result)", terminator: " ")
+        self.op_trace("ADD \(left) + \(right) = \(result)")
     }
     @inline(__always)
     public mutating func SUB() {
@@ -299,7 +303,7 @@ public struct swiftVMLib {
         let left = self.stack.pop()
         let result = left &- right
         self.stack.push(value: result)
-        dprint("SUB \(left) - \(right) = \(result)", terminator: " ")
+        self.op_trace("SUB \(left) - \(right) = \(result)")
     }
     @inline(__always)
     public mutating func MUL() {
@@ -307,7 +311,7 @@ public struct swiftVMLib {
         let left = self.stack.pop()
         let result = left &* right
         self.stack.push(value: result)
-        dprint("MUL \(left) * \(right) = \(result)", terminator: " ")
+        self.op_trace("MUL \(left) * \(right) = \(result)")
     }
     @inline(__always)
     public mutating func DIV() {
@@ -316,7 +320,7 @@ public struct swiftVMLib {
         assert(right != 0, "Division by zero")
         let result = left / right
         self.stack.push(value: result)
-        dprint("DIV \(left) / \(right) = \(result)", terminator: " ")
+        self.op_trace("DIV \(left) / \(right) = \(result)")
     }
     @inline(__always)
     public mutating func MOD() {
@@ -325,6 +329,6 @@ public struct swiftVMLib {
         assert(right != 0, "Modulo by zero")
         let result = left % right
         self.stack.push(value: result)
-        dprint("MOD \(left) % \(right) = \(result)", terminator: " ")
+        self.op_trace("MOD \(left) % \(right) = \(result)")
     }
 }
