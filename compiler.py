@@ -94,11 +94,12 @@ class BytecodeCompiler(ast.NodeVisitor):
         if not isinstance(node.targets[0], ast.Subscript) or not isinstance(node.targets[0].value, ast.Name) or node.targets[0].value.id != 'VM':
             raise NotImplementedError("Only assignment to VM[] is supported.")
 
-        # 右辺の値を評価してスタックに積む
+        # 右辺の値を先に評価 (スタックに積まれる)
         self.visit(node.value)
-        
-        # 左辺のaddressをスタックに積んでVM[<address>] にポップ
+        # 左辺のaddressを後から評価 (スタックに積まれる)
         self.visit(node.targets[0].slice)
+
+        # VM[<address>] にポップ
         self.code.append(OP_POPA)
 
     def visit_BinOp(self, node):
