@@ -288,7 +288,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         elif isinstance(node.op, ast.Invert):
             self.code.extend([OP_PUSHW, 0xFF, 0xFF, OP_XOR])  # ビット反転 (XOR 0xFF)
         elif isinstance(node.op, ast.Not):
-            self.code.extend([OP_PUSHB, 0, OP_CMP, CMP_EQ])  # 論理否定 (0なら1、0以外なら0)
+            self.code.extend(OP_NOT)  # 論理否定 (0なら1、0以外なら0)
         elif isinstance(node.op, ast.UAdd):
             pass  # 単項プラスは何もしない
         else:
