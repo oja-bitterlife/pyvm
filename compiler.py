@@ -55,30 +55,23 @@ class BytecodeCompiler(ast.NodeVisitor):
     def visit_Return(self, node):
         if node.value is None:
             # 何もなければ0をプッシュして終了
-            self.code.append(OP_PUSHB)
-            self.code.append(0)
+            self.code.extend([OP_PUSHB, 0])
         else:
             self.visit(node.value)
 
     def visit_Constant(self, node):
         val = int(node.value)
         if(val & 0xFF00) == 0:
-            self.code.append(OP_PUSHB)
-            self.code.append(val & 0xFF)
+            self.code.extend([OP_PUSHB, val & 0xFF])
         else:
-            self.code.append(OP_PUSHW)
-            self.code.append(val & 0xFF)
-            self.code.append((val >> 8) & 0xFF)
+            self.code.extend([OP_PUSHW, val & 0xFF, (val >> 8) & 0xFF])
 
     def visit_Name(self, node):
         val = globals().get(node.id)
         if(val & 0xFF00) == 0:
-            self.code.append(OP_PUSHB)
-            self.code.append(val & 0xFF)
+            self.code.extend([OP_PUSHB, val & 0xFF])
         else:
-            self.code.append(OP_PUSHW)
-            self.code.append(val & 0xFF)
-            self.code.append((val >> 8) & 0xFF)
+            self.code.extend([OP_PUSHW, val & 0xFF, (val >> 8) & 0xFF])
 
     # VM[index] の値をロードしてスタックに積む
     def visit_Subscript(self, node):
@@ -169,22 +162,37 @@ class BytecodeCompiler(ast.NodeVisitor):
         elif isinstance(op, ast.GtE): cmp_subcode = CMP_GE
         else: raise NotImplementedError(f"Unsupported operator: {type(op)}")
         
-        self.code.append(OP_CMP)
-        self.code.append(cmp_subcode)
+        self.code.extend([OP_CMP, cmp_subcode])
 
     def visit_If(self, node):
+        # 条件式の評価
         self.visit(node.test)
-        self.code.append(OP_JZ)
-        jump_fixup_pos = len(self.code)
-        self.code.append(ADDR_ERROR)
-
-        # if 文の本体
+        
+        # 偽だった場合にジャンプする場所
+        else_jump_pos = len(self.code)
+        self.code.extend([OP_JZ, ADDR_ERROR])  # 仮のジャンプ先をセット
+        
+        # 条件が真のときの本体 (body)
         for stmt in node.body:
             self.visit(stmt)
-
-        # if文の本体が終わったら、ジャンプ先を修正する
-        target_pos = len(self.code)
-        self.code[jump_fixup_pos] = min(ADDR_ERROR, target_pos)
+            
+        # else部分を飛ばすJMP
+        if node.orelse:
+            exit_jump_pos = len(self.code)
+            self.code.extend([OP_JMP, ADDR_ERROR])  # 仮のジャンプ先をセット
+        
+        # else/elif が始まる場所をパッチ
+        self.code[else_jump_pos + 1] = len(self.code)
+        
+        if node.orelse:
+            if len(node.orelse) == 1 and isinstance(node.orelse[0], ast.If):
+                self.visit(node.orelse[0])
+            else:
+                for stmt in node.orelse:
+                    self.visit(stmt)
+                    
+            # 脱出用 JMP のアドレスをパッチ
+            self.code[exit_jump_pos + 1] = len(self.code)
 
     def visit_BoolOp(self, node):
         # 複数の比較が含まれている場合は、and/or のツリーに変換して再帰的に処理する
@@ -207,6 +215,48 @@ class BytecodeCompiler(ast.NodeVisitor):
                 self.code.append(OP_OR)
         else:
             raise NotImplementedError(f"Unsupported boolean operator: {type(node.op)}")
+
+
+    def visit_Match(self, node):
+        # match 文の対象となる値を評価してスタックに積む
+        self.visit(node.subject)
+
+        # 各 case の処理
+        for case in node.cases:
+            # case のパターンを評価してスタックに積む
+            self.visit(case.pattern)
+
+            # スタックから [対象値, パターン値] をポップして比較し、結果をスタックに積む
+            self.code.append(OP_CMP)
+            self.code.append(CMP_EQ)
+
+            # 比較結果が 0 (False) なら次の case にジャンプする
+            self.code.append(OP_JZ)
+            jump_fixup_pos = len(self.code)
+            self.code.append(ADDR_ERROR)
+
+            # case の本体を評価
+            for stmt in case.body:
+                self.visit(stmt)
+
+            # case の本体が終わったら、ジャンプ先を修正する
+            target_pos = len(self.code)
+            self.code[jump_fixup_pos] = min(ADDR_ERROR, target_pos)
+
+    def visit_MatchValue(self, node):
+        # match 文の case のパターン値を評価してスタックに積む
+        self.visit(node.value)
+
+    def visit_MatchAs(self, node):
+        # match 文の case のパターン値を評価してスタックに積む
+        if node.name is not None:
+            # 変数名が指定されている場合は、その変数に値を代入する
+            self.visit(node.pattern)
+            self.code.append(OP_POPA)
+            self.code.append(globals()[node.name])
+        else:
+            # 変数名が指定されていない場合は、単純にパターン値を評価する
+            self.visit(node.pattern)
 
 
 # 使用例
