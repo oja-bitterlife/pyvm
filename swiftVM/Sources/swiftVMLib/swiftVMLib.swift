@@ -1,3 +1,20 @@
+// swiftVMLib.swift
+
+/// デバッグビルド時のみコンパイル・実行されるprint関数
+@inlinable
+public func dprint(
+    _ items: Any...,
+    separator: String = " ",
+    terminator: String = "\n"
+) {
+    #if DEBUG
+        let output = items.map { "\($0)" }.joined(separator: separator)
+        Swift.print(output, terminator: terminator)
+    #endif
+}
+
+// ============================================================================
+// MARK: VM本体
 public struct swiftVMLib {
     var pc = 0  // プログラムカウンタ（命令ポインタ）
 
@@ -44,6 +61,9 @@ public struct swiftVMLib {
         private let ptr: UnsafeMutablePointer<UInt16>
         private let size: Int
         private var sp: Int
+        #if DEBUG
+            public var stackMax: Int = 0  // スタックの最大使用量を追跡するためのデバッグ用変数
+        #endif
 
         fileprivate init(address: UInt, size: Int) {
             self.ptr = UnsafeMutablePointer<UInt16>(bitPattern: address)!
@@ -55,6 +75,11 @@ public struct swiftVMLib {
             assert(self.sp < self.size, "Stack overflow")
             self.ptr[self.sp] = value
             self.sp += 1
+            #if DEBUG
+                if self.sp > self.stackMax {
+                    self.stackMax = self.sp
+                }
+            #endif
         }
         public mutating func pop() -> UInt16 {
             assert(self.sp > 0, "Stack underflow")
@@ -94,11 +119,12 @@ public struct swiftVMLib {
 
     public mutating func step() -> Bool {
         let op = Int(self.code[self.pc])
+        dprint("PC: \(self.pc)", terminator: " ")
         self.pc += 1
 
         switch op {
         case OP_HALT:
-            self.pc -= 1  // HALT命令の後はPCを戻す
+            self.HALT()
             return true
         case OP_PUSHA:
             self.PUSHA()
@@ -137,55 +163,76 @@ public struct swiftVMLib {
             assert(false, "Unknown opcode(pc:\(self.pc-1)): \(op)")
         }
 
+        dprint("")
+
         assert(self.pc < 256, "Program counter out of bounds")
         return false
     }
 
     // MARK: - 命令の実装（スタックマシン版）
 
-    public mutating func PUSHA() {
-        let addr = self.code[self.pc]
-        self.pc += 1
-        self.stack.push(value: self.mem[Int(addr)])
+    @inline(__always)
+    public mutating func HALT() {
+        self.pc -= 1  // HALT命令の後はPCを戻す
+        dprint("HALT")
     }
+
+    @inline(__always)
+    public mutating func PUSHA() {
+        let addr = self.stack.pop()
+        self.stack.push(value: self.mem[Int(addr)])
+        dprint("PUSHA \(self.mem[Int(addr)]) in VM[\(Int(addr))]", terminator: " ")
+    }
+    @inline(__always)
     public mutating func PUSHB() {
         let value = self.code[self.pc]
         self.pc += 1
         self.stack.push(value: UInt16(value))
+        dprint("PUSHB \(value)", terminator: " ")
     }
+    @inline(__always)
     public mutating func PUSHW() {
         let value = UInt16(self.code[self.pc]) << 8 | UInt16(self.code[self.pc + 1])
         self.pc += 2
         self.stack.push(value: value)
+        dprint("PUSHW \(value)", terminator: " ")
     }
+    @inline(__always)
     public mutating func POPA() {
-        let addr = self.code[self.pc]
-        self.pc += 1
+        let addr = self.stack.pop()
         let value = self.stack.pop()
         self.mem[Int(addr)] = value
+        dprint("POPA VM[\(Int(addr))] <= \(value)", terminator: " ")
     }
 
+    @inline(__always)
     public mutating func JMP() {
         self.pc = Int(self.code[self.pc])
+        dprint("JMP to \(self.pc)", terminator: " ")
     }
+    @inline(__always)
     public mutating func JZ() {
         let addr = self.code[self.pc]
         self.pc += 1
         // 条件値はスタックからポップして判定
         let cond = self.stack.pop()
+        dprint("JZ \(cond) == 0 ? jump to \(addr) : continue", terminator: " ")
         if cond == 0 {
             self.pc = Int(addr)
         }
     }
+    @inline(__always)
     public mutating func JNZ() {
         let addr = self.code[self.pc]
         self.pc += 1
         let cond = self.stack.pop()
+        dprint("JNZ \(cond) != 0 ? jump to \(addr) : continue", terminator: " ")
         if cond != 0 {
             self.pc = Int(addr)
         }
     }
 
+    @inline(__always)
     public mutating func CMP() {
         let subcode = Int(self.code[self.pc])
         self.pc += 1
@@ -209,57 +256,75 @@ public struct swiftVMLib {
 
         // 比較結果をスタックにプッシュ
         self.stack.push(value: result)
+
+        dprint("CMP \(left) [\(subcode)] \(right) = \(result)", terminator: " ")
     }
 
+    @inline(__always)
     public mutating func AND() {
         let right = self.stack.pop()
         let left = self.stack.pop()
         let result = left & right
         self.stack.push(value: result)
+        dprint("AND \(left) & \(right) = \(result)", terminator: " ")
     }
+    @inline(__always)
     public mutating func OR() {
         let right = self.stack.pop()
         let left = self.stack.pop()
         let result = left | right
         self.stack.push(value: result)
+        dprint("OR \(left) | \(right) = \(result)", terminator: " ")
     }
+    @inline(__always)
     public mutating func XOR() {
         let right = self.stack.pop()
         let left = self.stack.pop()
         let result = left ^ right
         self.stack.push(value: result)
+        dprint("XOR \(left) ^ \(right) = \(result)", terminator: " ")
     }
 
+    @inline(__always)
     public mutating func ADD() {
         let right = self.stack.pop()
         let left = self.stack.pop()
         let result = left &+ right
         self.stack.push(value: result)
+        dprint("ADD \(left) + \(right) = \(result)", terminator: " ")
     }
+    @inline(__always)
     public mutating func SUB() {
         let right = self.stack.pop()
         let left = self.stack.pop()
         let result = left &- right
         self.stack.push(value: result)
+        dprint("SUB \(left) - \(right) = \(result)", terminator: " ")
     }
+    @inline(__always)
     public mutating func MUL() {
         let right = self.stack.pop()
         let left = self.stack.pop()
         let result = left &* right
         self.stack.push(value: result)
+        dprint("MUL \(left) * \(right) = \(result)", terminator: " ")
     }
+    @inline(__always)
     public mutating func DIV() {
         let right = self.stack.pop()
         let left = self.stack.pop()
         assert(right != 0, "Division by zero")
         let result = left / right
         self.stack.push(value: result)
+        dprint("DIV \(left) / \(right) = \(result)", terminator: " ")
     }
+    @inline(__always)
     public mutating func MOD() {
         let right = self.stack.pop()
         let left = self.stack.pop()
         assert(right != 0, "Modulo by zero")
         let result = left % right
         self.stack.push(value: result)
+        dprint("MOD \(left) % \(right) = \(result)", terminator: " ")
     }
 }

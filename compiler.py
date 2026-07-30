@@ -57,19 +57,26 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code.append(0)
         else:
             self.visit(node.value)
-        self.code.append(OP_HALT)
 
     def visit_Constant(self, node):
         val = int(node.value)
-        self.code.append(OP_PUSHW)
-        self.code.append(val & 0xFF)
-        self.code.append((val >> 8) & 0xFF)
+        if(val & 0xFF00) == 0:
+            self.code.append(OP_PUSHB)
+            self.code.append(val & 0xFF)
+        else:
+            self.code.append(OP_PUSHW)
+            self.code.append(val & 0xFF)
+            self.code.append((val >> 8) & 0xFF)
 
     def visit_Name(self, node):
         val = globals().get(node.id)
-        self.code.append(OP_PUSHW)
-        self.code.append(val & 0xFF)
-        self.code.append((val >> 8) & 0xFF)
+        if(val & 0xFF00) == 0:
+            self.code.append(OP_PUSHB)
+            self.code.append(val & 0xFF)
+        else:
+            self.code.append(OP_PUSHW)
+            self.code.append(val & 0xFF)
+            self.code.append((val >> 8) & 0xFF)
 
     # VM[index] の値をロードしてスタックに積む
     def visit_Subscript(self, node):

@@ -16,7 +16,7 @@ struct swiftVM {
             print("Error reading file: \(error)")
             return
         }
-        var rawMem = [UInt16](repeating: 0, count: 256)
+        var rawMem = [UInt16](repeating: 0, count: 32)
         var stackMem = [UInt16](repeating: 0, count: 256)
 
         // メモリアドレスの取得
@@ -36,7 +36,8 @@ struct swiftVM {
         while true {
             let shouldHalt = vm.step()
             if shouldHalt {
-                print("HALT(pc:\(vm.getPC())) return:\(vm.result())")
+                print("return: \(vm.result())")
+                print("Stack max usage: \(vm.stack.stackMax) / \(stackMem.count)")
                 break
             }
         }
