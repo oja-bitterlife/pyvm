@@ -60,6 +60,8 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code.extend([OP_PUSHB, 0])
         else:
             self.visit(node.value)
+            # 今はとりあえずHALTで終了するようにしておく
+            self.code.append(OP_HALT)
 
     def visit_Constant(self, node):
         val = int(node.value)
