@@ -264,7 +264,6 @@ class BytecodeCompiler(ast.NodeVisitor):
 
         self.code.append(OP_DEL)  # スタックから対象値をポップして破棄
 
-
     def visit_MatchValue(self, node):
         # match 文の case のパターン値を評価してスタックに積む
         self.visit(node.value)

@@ -17,7 +17,7 @@ struct swiftVM {
             return
         }
         var rawMem = [UInt16](repeating: 0, count: 32)
-        var stackMem = [UInt16](repeating: 0, count: 256)
+        var stackMem = [UInt16](repeating: 0, count: 64)
 
         // メモリアドレスの取得
         let codeAddr = UInt(UInt(bitPattern: rawCode.withUnsafeBufferPointer { $0.baseAddress }))
