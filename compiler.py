@@ -137,6 +137,13 @@ class BytecodeCompiler(ast.NodeVisitor):
         else:
             raise NotImplementedError(f"Unsupported binary operator: {type(node.op)}")
 
+    # 複合代入 (例: a += 1) を、単純な代入 (a = a + 1) に変換して処理する
+    def visit_AugAssign(self, node):
+        # binOpに変換する
+        bin_op = ast.BinOp(left=node.target, op=node.op, right=node.value)
+        assign = ast.Assign(targets=[node.target], value=bin_op)
+        self.visit(assign)
+
     # 複数の比較（例: a < b < c）を、(a < b) and (b < c) の ast.BoolOp に分解するヘルパー
     def desugar_compare(self, node):
         if len(node.ops) == 1:
@@ -345,12 +352,36 @@ class BytecodeCompiler(ast.NodeVisitor):
         # 偽だった場合のジャンプ先をパッチ
         self.code[exit_jump_pos + 1] = len(self.code)
 
-    # 複合代入 (例: a += 1) を、単純な代入 (a = a + 1) に変換して処理する
-    def visit_AugAssign(self, node):
-        # binOpに変換する
-        bin_op = ast.BinOp(left=node.target, op=node.op, right=node.value)
-        assign = ast.Assign(targets=[node.target], value=bin_op)
-        self.visit(assign)
+
+    # for i in [0, 1, 2]: のような単純な for 文のみをサポートする
+    def visit_For(self, node):
+        # 引数はリストかタプルであることを確認
+        if not isinstance(node.iter, (ast.List, ast.Tuple)):
+            raise NotImplementedError("Only for loops over lists or tuples are supported.")
+
+        # リストの要素をスタックに積む
+        self.visit(node.iter)  # [..., item2, item1, Length]
+
+        # ループの開始位置を記録
+        loop_start_pos = len(self.code)
+
+        # Lengthが0ならループを終了する
+        exit_jump_pos = len(self.code)
+        self.code.extend([OP_JZ, ADDR_ERROR])  # 仮のジャンプ先をセット
+
+        # Lengthを減らして最初の要素を取り出す
+        self.code.extend([OP_PUSHW, 0xFF, 0xFF, OP_SWP, OP_SUB])  # [item, Length-1]
+        self.code.append(OP_SWP)  # [Length-1, item]
+
+
+
+    def visit_List(self, node):
+        # リストの要素を順に評価してスタックに積む
+        for val in reversed(node.elts):
+            self.visit(val)
+
+        # スタック上の要素数を記録するために、リストの長さをスタックに積む
+        self.code.extend([OP_PUSHB, len(node.elts)])
 
 
 # 使用例
