@@ -3,9 +3,6 @@ from vm import *
 def main():
     VM[VM_EVENT] = EVENT_KEY_START
     VM[VM_SELECT_NO] = 0
-    for i in [0, 1, 2]:
-        VM[VM_SELECT_NO] += i
-
     if VM[VM_EVENT] == EVENT_KEY_A or VM[VM_EVENT] == EVENT_KEY_START:
         match VM[VM_SELECT_NO]:
             case 0:

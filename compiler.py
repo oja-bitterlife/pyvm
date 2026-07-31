@@ -80,6 +80,11 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code.extend([OP_PUSHW, val & 0xFF, (val >> 8) & 0xFF])
 
     def visit_Name(self, node):
+        # globalsに無い変数は使ってはいけない
+        if node.id not in globals():
+            # 変数は使えないので、エラーを出す
+            raise NotImplementedError(f"Variable '{node.id}' is not supported.")
+
         val = globals().get(node.id)
         if(val & 0xFF00) == 0:
             self.code.extend([OP_PUSHB, val & 0xFF])
@@ -353,35 +358,23 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.code[exit_jump_pos + 1] = len(self.code)
 
 
-    # for i in [0, 1, 2]: のような単純な for 文のみをサポートする
+    # forは展開
     def visit_For(self, node):
         # 引数はリストかタプルであることを確認
         if not isinstance(node.iter, (ast.List, ast.Tuple)):
             raise NotImplementedError("Only for loops over lists or tuples are supported.")
 
-        # リストの要素をスタックに積む
-        self.visit(node.iter)  # [..., item2, item1, Length]
+        # リストを順に処理
+        for val in reversed(node.iter.elts):
+            assign = ast.Assign(
+                targets=[node.target], 
+                value=val
+            )
+            self.visit(assign)
 
-        # ループの開始位置を記録
-        loop_start_pos = len(self.code)
-
-        # Lengthが0ならループを終了する
-        exit_jump_pos = len(self.code)
-        self.code.extend([OP_JZ, ADDR_ERROR])  # 仮のジャンプ先をセット
-
-        # Lengthを減らして最初の要素を取り出す
-        self.code.extend([OP_PUSHW, 0xFF, 0xFF, OP_SWP, OP_SUB])  # [item, Length-1]
-        self.code.append(OP_SWP)  # [Length-1, item]
-
-
-
-    def visit_List(self, node):
-        # リストの要素を順に評価してスタックに積む
-        for val in reversed(node.elts):
-            self.visit(val)
-
-        # スタック上の要素数を記録するために、リストの長さをスタックに積む
-        self.code.extend([OP_PUSHB, len(node.elts)])
+            # forの本体を展開
+            for stmt in node.body:
+                self.visit(stmt)
 
 
 # 使用例
