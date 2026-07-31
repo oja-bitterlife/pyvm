@@ -142,6 +142,10 @@ public struct swiftVMLib {
             self.POPA()
         case OP_DUP:
             self.DUP()
+        case OP_OVER:
+            self.OVER()
+        case OP_SWP:
+            self.SWP()
         case OP_DEL:
             self.DEL()
         case OP_JMP:
@@ -216,6 +220,23 @@ public struct swiftVMLib {
         let value = self.stack.peek()
         self.stack.push(value: value)
         self.op_trace("DUP \(value)")
+    }
+    @inline(__always)
+    public mutating func OVER() {
+        let top1 = self.stack.pop()
+        let top2 = self.stack.pop()
+        self.stack.push(value: top2)
+        self.stack.push(value: top1)
+        self.stack.push(value: top2)
+        self.op_trace("OVER [\(top2), \(top1)] => [\(top2), \(top1), \(top2)]")
+    }
+    @inline(__always)
+    public mutating func SWP() {
+        let top1 = self.stack.pop()
+        let top2 = self.stack.pop()
+        self.stack.push(value: top1)
+        self.stack.push(value: top2)
+        self.op_trace("SWP [\(top2), \(top1)] => [\(top1), \(top2)]")
     }
     @inline(__always)
     public mutating func DEL() {

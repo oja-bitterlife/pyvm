@@ -11,7 +11,9 @@ OP_PUSHB    = 0x02  # スタックにByteをプッシュ
 OP_PUSHW    = 0x03  # スタックにWordをプッシュ
 OP_POPA     = 0x04  # スタックからVM[<address>] にポップ
 OP_DUP      = 0x05  # スタックトップの値を複製して積む
-OP_DEL      = 0x06  # スタックから値をポップして破棄
+OP_OVER     = 0x06  # スタックトップの2つ目の値を複製して積む
+OP_SWP      = 0x07  # スタックトップの2つの値を入れ替える
+OP_DEL      = 0x08  # スタックから値をポップして破棄
 OP_JMP      = 0x10
 OP_JZ       = 0x11
 OP_CMP      = 0x20  # スタックから [左辺, 右辺] をポップして比較し、結果(0 or 1)をプッシュ
@@ -235,14 +237,8 @@ class BytecodeCompiler(ast.NodeVisitor):
                     self.visit(stmt)
                 break
 
-            # スタックトップの値を複製して積む (対象値を保持するため)
-            self.code.append(OP_DUP)
-
-            # case のパターンを評価してスタックに積む
+            # case のパターン全体を評価してスタックに積む
             self.visit(case.pattern)
-
-            # スタックから [対象値, パターン値] をポップして比較し、結果をスタックに積む
-            self.code.extend([OP_CMP, CMP_EQ])
 
             # 比較結果が 0 (False) なら次の case にジャンプする
             next_case_jump_pos = len(self.code)
@@ -265,23 +261,46 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.code.append(OP_DEL)  # スタックから対象値をポップして破棄
 
     def visit_MatchValue(self, node):
-        # match 文の case のパターン値を評価してスタックに積む
+        # スタックトップの値を複製して積む (対象値を保持するため)
+        self.code.append(OP_DUP)
+
+        # パターンを評価してスタックに積む
         self.visit(node.value)
 
+        # スタックから [対象値, パターン値] をポップして比較し、結果をスタックに積む
+        self.code.extend([OP_CMP, CMP_EQ])
+
     def visit_MatchAs(self, node):
+        # スタックトップの値を複製して積む (対象値を保持するため)
+        self.code.append(OP_DUP)
+
         # match 文の case のパターン値を評価してスタックに積む
         if node.name is not None:
             # 変数名が指定されている場合は、その変数に値を代入する
-            self.visit(node.pattern)
-            self.code.extend([OP_POPA, globals()[node.name]])
+            val = globals()[node.name]
+            if(val & 0xFF00) == 0:
+                self.code.extend([OP_PUSHB, val & 0xFF])
+            else:
+                self.code.extend([OP_PUSHW, val & 0xFF, (val >> 8) & 0xFF])
+            print(f"Assigning {node.name} = {val} in match case")
         else:
             # 変数名が指定されていない場合は、単純にパターン値を評価する
             self.visit(node.pattern)
 
+        # スタックから [対象値, パターン値] をポップして比較し、結果をスタックに積む
+        self.code.extend([OP_CMP, CMP_EQ])
+
     def visit_MatchSequence(self, node):
+        # 最初のパターンを評価してスタックに積む
+        self.visit(node.patterns[0])  # [対象値, 評価1]
+
         # match 文の case のシーケンスパターンを評価してスタックに積む
-        for elt in node.patterns:
-            self.visit(elt)
+        for i, val in enumerate(node.patterns[1:]):
+            self.code.append(OP_OVER)  # [対象値, 評価1, 複製]
+            self.visit(val)  # [対象値, 評価1, 複製, 評価2]
+            self.code.append(OP_SWP)  # [対象値, 評価1, 評価2, 複製]
+            self.code.append(OP_DEL)  # [対象値, 評価1, 評価2]
+            self.code.append(OP_OR)  # [対象値, OR結果]
 
     def visit_UnaryOp(self, node):
         # 右辺を先に評価 (スタックに積まれる)
