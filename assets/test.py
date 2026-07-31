@@ -2,7 +2,10 @@ from vm import *
 
 def main():
     VM[VM_EVENT] = EVENT_KEY_START
-    VM[VM_SELECT_NO] = 2
+    VM[VM_SELECT_NO] = 0
+    while VM[VM_SELECT_NO] < 2:
+        VM[VM_SELECT_NO] += 1
+
     if VM[VM_EVENT] == EVENT_KEY_A or VM[VM_EVENT] == EVENT_KEY_START:
         match VM[VM_SELECT_NO]:
             case 0:
