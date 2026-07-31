@@ -1,14 +1,12 @@
 // swiftVMLib.swift
 
 /// デバッグビルド時のみコンパイル・実行されるprint関数
-@inlinable
-@inline(__always)
-public func dprint(_ items: Any..., separator: String = " ", terminator: String = "\n") {
-    #if DEBUG
+#if !EMBEDDED
+    public func dprint(_ items: Any..., separator: String = " ", terminator: String = "\n") {
         let output = items.map { "\($0)" }.joined(separator: separator)
         Swift.print(output, terminator: terminator)
-    #endif
-}
+    }
+#endif
 
 // ============================================================================
 // MARK: VM本体
@@ -25,7 +23,9 @@ public struct swiftVMLib {
 
         public subscript(index: Int) -> UInt8 {
             get {
-                assert(index >= 0 && index < 256, "Code index out of range")
+                #if !EMBEDDED
+                    assert(index >= 0 && index < 256, "Code index out of range")
+                #endif
                 return ptr[index]
             }
         }
@@ -43,11 +43,15 @@ public struct swiftVMLib {
 
         public subscript(index: Int) -> UInt16 {
             get {
-                assert(index >= 0 && index < self.size, "Memory index out of range")
+                #if !EMBEDDED
+                    assert(index >= 0 && index < self.size, "Memory index out of range")
+                #endif
                 return ptr[index]
             }
             set {
-                assert(index >= 0 && index < self.size, "Memory index out of range")
+                #if !EMBEDDED
+                    assert(index >= 0 && index < self.size, "Memory index out of range")
+                #endif
                 ptr[index] = newValue
             }
         }
@@ -58,7 +62,7 @@ public struct swiftVMLib {
         private let ptr: UnsafeMutablePointer<UInt16>
         private let size: Int
         private var sp: Int
-        #if DEBUG
+        #if !EMBEDDED
             public var stackMax: Int = 0  // スタックの最大使用量を追跡するためのデバッグ用変数
         #endif
 
@@ -69,35 +73,40 @@ public struct swiftVMLib {
         }
 
         public mutating func push(value: UInt16) {
-            assert(self.sp < self.size, "Stack overflow")
+            #if !EMBEDDED
+                assert(self.sp < self.size, "Stack overflow")
+            #endif
             self.ptr[self.sp] = value
             self.sp += 1
-            #if DEBUG
+            #if !EMBEDDED
                 if self.sp > self.stackMax {
                     self.stackMax = self.sp
                 }
             #endif
         }
         public mutating func pop() -> UInt16 {
-            assert(self.sp > 0, "Stack underflow")
+            #if !EMBEDDED
+                assert(self.sp > 0, "Stack underflow")
+            #endif
             self.sp -= 1
             return self.ptr[self.sp]
         }
 
         public func peek() -> UInt16 {
-            assert(self.sp > 0, "Stack is empty")
+            #if !EMBEDDED
+                assert(self.sp > 0, "Stack is empty")
+            #endif
             return self.ptr[self.sp - 1]
         }
     }
 
     /// デバッグビルド時のみOPコードの実行をトレースする関数
-    @inline(__always)
-    public func op_trace(_ items: Any..., separator: String = " ", terminator: String = "\n") {
-        #if DEBUG
+    #if !EMBEDDED
+        public func op_trace(_ items: Any..., separator: String = " ", terminator: String = "\n") {
             let output = items.map { "\($0)" }.joined(separator: separator)
-            Swift.print(output, terminator: terminator)
-        #endif
-    }
+            print(output, terminator: terminator)
+        }
+    #endif
 
     // MARK: - VM本体のプロパティ
     public let code: CodeMemory
@@ -124,8 +133,10 @@ public struct swiftVMLib {
     }
 
     public mutating func step() -> Bool {
+        #if !EMBEDDED
+            self.op_trace("\(self.pc):", terminator: " ")
+        #endif
         let op = Int(self.code[self.pc])
-        self.op_trace("\(self.pc):", terminator: " ")
         self.pc += 1
 
         switch op {
@@ -173,10 +184,14 @@ public struct swiftVMLib {
         case OP_MOD:
             self.MOD()
         default:
-            assert(false, "Unknown opcode(pc:\(self.pc-1)): \(op)")
+            #if !EMBEDDED
+                assert(false, "Unknown opcode(pc:\(self.pc-1)): \(op)")
+            #endif
         }
 
-        assert(self.pc < 256, "Program counter out of bounds")
+        #if !EMBEDDED
+            assert(self.pc < 256, "Program counter out of bounds")
+        #endif
         return false
     }
 
@@ -185,41 +200,53 @@ public struct swiftVMLib {
     @inline(__always)
     public mutating func HALT() {
         self.pc -= 1  // HALT命令の後はPCを戻す
-        self.op_trace("HALT")
+        #if !EMBEDDED
+            self.op_trace("HALT")
+        #endif
     }
 
     @inline(__always)
     public mutating func PUSHA() {
         let addr = self.stack.pop()
         self.stack.push(value: self.mem[Int(addr)])
-        self.op_trace("PUSHA \(self.mem[Int(addr)]) in VM[\(Int(addr))]")
+        #if !EMBEDDED
+            self.op_trace("PUSHA \(self.mem[Int(addr)]) in VM[\(Int(addr))]")
+        #endif
     }
     @inline(__always)
     public mutating func PUSHB() {
         let value = self.code[self.pc]
         self.pc += 1
         self.stack.push(value: UInt16(value))
-        self.op_trace("PUSHB \(value)")
+        #if !EMBEDDED
+            self.op_trace("PUSHB \(value)")
+        #endif
     }
     @inline(__always)
     public mutating func PUSHW() {
         let value = UInt16(self.code[self.pc + 1]) << 8 | UInt16(self.code[self.pc])
         self.pc += 2
         self.stack.push(value: value)
-        self.op_trace("PUSHW \(value)")
+        #if !EMBEDDED
+            self.op_trace("PUSHW \(value)")
+        #endif
     }
     @inline(__always)
     public mutating func POPA() {
         let addr = self.stack.pop()
         let value = self.stack.pop()
         self.mem[Int(addr)] = value
-        self.op_trace("POPA VM[\(Int(addr))] <= \(value)")
+        #if !EMBEDDED
+            self.op_trace("POPA VM[\(Int(addr))] <= \(value)")
+        #endif
     }
     @inline(__always)
     public mutating func DUP() {
         let value = self.stack.peek()
         self.stack.push(value: value)
-        self.op_trace("DUP \(value)")
+        #if !EMBEDDED
+            self.op_trace("DUP \(value)")
+        #endif
     }
     @inline(__always)
     public mutating func OVER() {
@@ -228,7 +255,9 @@ public struct swiftVMLib {
         self.stack.push(value: top2)
         self.stack.push(value: top1)
         self.stack.push(value: top2)
-        self.op_trace("OVER [\(top2), \(top1)] => [\(top2), \(top1), \(top2)]")
+        #if !EMBEDDED
+            self.op_trace("OVER [\(top2), \(top1)] => [\(top2), \(top1), \(top2)]")
+        #endif
     }
     @inline(__always)
     public mutating func SWP() {
@@ -236,18 +265,24 @@ public struct swiftVMLib {
         let top2 = self.stack.pop()
         self.stack.push(value: top1)
         self.stack.push(value: top2)
-        self.op_trace("SWP [\(top2), \(top1)] => [\(top1), \(top2)]")
+        #if !EMBEDDED
+            self.op_trace("SWP [\(top2), \(top1)] => [\(top1), \(top2)]")
+        #endif
     }
     @inline(__always)
     public mutating func DEL() {
         let value = self.stack.pop()
-        self.op_trace("DEL \(value)")
+        #if !EMBEDDED
+            self.op_trace("DEL \(value)")
+        #endif
     }
 
     @inline(__always)
     public mutating func JMP() {
         self.pc = Int(self.code[self.pc])
-        self.op_trace("JMP to \(self.pc)")
+        #if !EMBEDDED
+            self.op_trace("JMP to \(self.pc)")
+        #endif
     }
     @inline(__always)
     public mutating func JZ() {
@@ -256,10 +291,14 @@ public struct swiftVMLib {
         // 条件値はスタックからポップして判定
         let cond = self.stack.pop()
         if cond == 0 {
-            self.op_trace("JZ \(cond): jump to \(addr)")
+            #if !EMBEDDED
+                self.op_trace("JZ \(cond): jump to \(addr)")
+            #endif
             self.pc = Int(addr)
         } else {
-            self.op_trace("JZ \(cond): pass")
+            #if !EMBEDDED
+                self.op_trace("JZ \(cond): pass")
+            #endif
         }
     }
     @inline(__always)
@@ -267,7 +306,9 @@ public struct swiftVMLib {
         let value = self.stack.pop()
         let result: UInt16 = (value == 0) ? 1 : 0
         self.stack.push(value: result)
-        self.op_trace("NOT \(value) => \(result)")
+        #if !EMBEDDED
+            self.op_trace("NOT \(value) => \(result)")
+        #endif
     }
 
     @inline(__always)
@@ -288,14 +329,16 @@ public struct swiftVMLib {
         case CMP_GT: result = (left > right) ? 1 : 0
         case CMP_GE: result = (left >= right) ? 1 : 0
         default:
-            assert(false, "Unknown comparison subcode: \(subcode)")
+            #if !EMBEDDED
+                assert(false, "Unknown comparison subcode: \(subcode)")
+            #endif
             result = 0
         }
 
         // 比較結果をスタックにプッシュ
         self.stack.push(value: result)
 
-        #if DEBUG
+        #if !EMBEDDED
             let subcodes = ["==", "!=", "<", "<=", ">", ">="]
             self.op_trace("CMP \(left) \(subcodes[subcode]) \(right) => \(result)")
         #endif
@@ -307,7 +350,9 @@ public struct swiftVMLib {
         let right = self.stack.pop()
         let result = left & right
         self.stack.push(value: result)
-        self.op_trace("AND \(left) & \(right) => \(result)")
+        #if !EMBEDDED
+            self.op_trace("AND \(left) & \(right) => \(result)")
+        #endif
     }
     @inline(__always)
     public mutating func OR() {
@@ -315,7 +360,9 @@ public struct swiftVMLib {
         let right = self.stack.pop()
         let result = left | right
         self.stack.push(value: result)
-        self.op_trace("OR \(left) | \(right) => \(result)")
+        #if !EMBEDDED
+            self.op_trace("OR \(left) | \(right) => \(result)")
+        #endif
     }
     @inline(__always)
     public mutating func XOR() {
@@ -323,7 +370,9 @@ public struct swiftVMLib {
         let right = self.stack.pop()
         let result = left ^ right
         self.stack.push(value: result)
-        self.op_trace("XOR \(left) ^ \(right) => \(result)")
+        #if !EMBEDDED
+            self.op_trace("XOR \(left) ^ \(right) => \(result)")
+        #endif
     }
 
     @inline(__always)
@@ -332,7 +381,9 @@ public struct swiftVMLib {
         let right = self.stack.pop()
         let result = left &+ right
         self.stack.push(value: result)
-        self.op_trace("ADD \(left) + \(right) => \(result)")
+        #if !EMBEDDED
+            self.op_trace("ADD \(left) + \(right) => \(result)")
+        #endif
     }
     @inline(__always)
     public mutating func SUB() {
@@ -340,7 +391,9 @@ public struct swiftVMLib {
         let right = self.stack.pop()
         let result = left &- right
         self.stack.push(value: result)
-        self.op_trace("SUB \(left) - \(right) => \(result)")
+        #if !EMBEDDED
+            self.op_trace("SUB \(left) - \(right) => \(result)")
+        #endif
     }
     @inline(__always)
     public mutating func MUL() {
@@ -348,24 +401,34 @@ public struct swiftVMLib {
         let right = self.stack.pop()
         let result = left &* right
         self.stack.push(value: result)
-        self.op_trace("MUL \(left) * \(right) => \(result)")
+        #if !EMBEDDED
+            self.op_trace("MUL \(left) * \(right) => \(result)")
+        #endif
     }
     @inline(__always)
     public mutating func DIV() {
         let left = self.stack.pop()
         let right = self.stack.pop()
-        assert(right != 0, "Division by zero")
+        #if !EMBEDDED
+            assert(right != 0, "Division by zero")
+        #endif
         let result = left / right
         self.stack.push(value: result)
-        self.op_trace("DIV \(left) / \(right) => \(result)")
+        #if !EMBEDDED
+            self.op_trace("DIV \(left) / \(right) => \(result)")
+        #endif
     }
     @inline(__always)
     public mutating func MOD() {
         let left = self.stack.pop()
         let right = self.stack.pop()
-        assert(right != 0, "Modulo by zero")
+        #if !EMBEDDED
+            assert(right != 0, "Modulo by zero")
+        #endif
         let result = left % right
         self.stack.push(value: result)
-        self.op_trace("MOD \(left) % \(right) => \(result)")
+        #if !EMBEDDED
+            self.op_trace("MOD \(left) % \(right) => \(result)")
+        #endif
     }
 }
