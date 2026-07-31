@@ -235,7 +235,7 @@ public struct swiftVMLib {
         // 条件値はスタックからポップして判定
         let cond = self.stack.pop()
         if cond == 0 {
-            self.op_trace("JZ \(cond): jump to \(addr) : continue")
+            self.op_trace("JZ \(cond): jump to \(addr)")
             self.pc = Int(addr)
         } else {
             self.op_trace("JZ \(cond): pass")
@@ -276,7 +276,7 @@ public struct swiftVMLib {
 
         #if DEBUG
             let subcodes = ["==", "!=", "<", "<=", ">", ">="]
-            self.op_trace("CMP \(left) \(subcodes[subcode]) \(right) = \(result)")
+            self.op_trace("CMP \(left) \(subcodes[subcode]) \(right) => \(result)")
         #endif
     }
 
@@ -286,7 +286,7 @@ public struct swiftVMLib {
         let right = self.stack.pop()
         let result = left & right
         self.stack.push(value: result)
-        self.op_trace("AND \(left) & \(right) = \(result)")
+        self.op_trace("AND \(left) & \(right) => \(result)")
     }
     @inline(__always)
     public mutating func OR() {
@@ -294,7 +294,7 @@ public struct swiftVMLib {
         let right = self.stack.pop()
         let result = left | right
         self.stack.push(value: result)
-        self.op_trace("OR \(left) | \(right) = \(result)")
+        self.op_trace("OR \(left) | \(right) => \(result)")
     }
     @inline(__always)
     public mutating func XOR() {
@@ -302,7 +302,7 @@ public struct swiftVMLib {
         let right = self.stack.pop()
         let result = left ^ right
         self.stack.push(value: result)
-        self.op_trace("XOR \(left) ^ \(right) = \(result)")
+        self.op_trace("XOR \(left) ^ \(right) => \(result)")
     }
 
     @inline(__always)
@@ -311,7 +311,7 @@ public struct swiftVMLib {
         let right = self.stack.pop()
         let result = left &+ right
         self.stack.push(value: result)
-        self.op_trace("ADD \(left) + \(right) = \(result)")
+        self.op_trace("ADD \(left) + \(right) => \(result)")
     }
     @inline(__always)
     public mutating func SUB() {
@@ -319,7 +319,7 @@ public struct swiftVMLib {
         let right = self.stack.pop()
         let result = left &- right
         self.stack.push(value: result)
-        self.op_trace("SUB \(left) - \(right) = \(result)")
+        self.op_trace("SUB \(left) - \(right) => \(result)")
     }
     @inline(__always)
     public mutating func MUL() {
@@ -327,7 +327,7 @@ public struct swiftVMLib {
         let right = self.stack.pop()
         let result = left &* right
         self.stack.push(value: result)
-        self.op_trace("MUL \(left) * \(right) = \(result)")
+        self.op_trace("MUL \(left) * \(right) => \(result)")
     }
     @inline(__always)
     public mutating func DIV() {
@@ -336,7 +336,7 @@ public struct swiftVMLib {
         assert(right != 0, "Division by zero")
         let result = left / right
         self.stack.push(value: result)
-        self.op_trace("DIV \(left) / \(right) = \(result)")
+        self.op_trace("DIV \(left) / \(right) => \(result)")
     }
     @inline(__always)
     public mutating func MOD() {
@@ -345,6 +345,6 @@ public struct swiftVMLib {
         assert(right != 0, "Modulo by zero")
         let result = left % right
         self.stack.push(value: result)
-        self.op_trace("MOD \(left) % \(right) = \(result)")
+        self.op_trace("MOD \(left) % \(right) => \(result)")
     }
 }

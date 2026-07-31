@@ -278,6 +278,11 @@ class BytecodeCompiler(ast.NodeVisitor):
             # 変数名が指定されていない場合は、単純にパターン値を評価する
             self.visit(node.pattern)
 
+    def visit_MatchSequence(self, node):
+        # match 文の case のシーケンスパターンを評価してスタックに積む
+        for elt in node.patterns:
+            self.visit(elt)
+
     def visit_UnaryOp(self, node):
         # 右辺を先に評価 (スタックに積まれる)
         self.visit(node.operand)
