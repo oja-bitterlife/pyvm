@@ -282,7 +282,6 @@ class BytecodeCompiler(ast.NodeVisitor):
                 self.code.extend([OP_PUSHB, val & 0xFF])
             else:
                 self.code.extend([OP_PUSHW, val & 0xFF, (val >> 8) & 0xFF])
-            print(f"Assigning {node.name} = {val} in match case")
         else:
             # 変数名が指定されていない場合は、単純にパターン値を評価する
             self.visit(node.pattern)
@@ -290,7 +289,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         # スタックから [対象値, パターン値] をポップして比較し、結果をスタックに積む
         self.code.extend([OP_CMP, CMP_EQ])
 
-    def visit_MatchSequence(self, node):
+    def visit_MatchOr(self, node):
         # 最初のパターンを評価してスタックに積む
         self.visit(node.patterns[0])  # [対象値, 評価1]
 
