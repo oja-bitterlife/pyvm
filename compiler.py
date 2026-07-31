@@ -324,6 +324,35 @@ class BytecodeCompiler(ast.NodeVisitor):
         else:
             raise NotImplementedError(f"Unsupported unary operator: {type(node.op)}")
 
+    def visit_While(self, node):
+        # while 文の開始位置を記録
+        loop_start_pos = len(self.code)
+
+        # 条件式の評価
+        self.visit(node.test)
+
+        # 偽だった場合にジャンプする場所
+        exit_jump_pos = len(self.code)
+        self.code.extend([OP_JZ, ADDR_ERROR])  # 仮のジャンプ先をセット
+
+        # while の本体 (body)
+        for stmt in node.body:
+            self.visit(stmt)
+
+        # ループの先頭に戻るJMP
+        self.code.extend([OP_JMP, loop_start_pos])
+
+        # 偽だった場合のジャンプ先をパッチ
+        self.code[exit_jump_pos + 1] = len(self.code)
+
+    # 複合代入 (例: a += 1) を、単純な代入 (a = a + 1) に変換して処理する
+    def visit_AugAssign(self, node):
+        # binOpに変換する
+        bin_op = ast.BinOp(left=node.target, op=node.op, right=node.value)
+        assign = ast.Assign(targets=[node.target], value=bin_op)
+        self.visit(assign)
+
+
 # 使用例
 arg_parser = argparse.ArgumentParser(description="Compile Python code to stack-machine bytecode.")
 arg_parser.add_argument("input_file", help="Path to the input Python file.")
