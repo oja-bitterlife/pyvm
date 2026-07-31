@@ -1,3 +1,4 @@
+import inspect
 from platform import node
 
 from assets.vm import *
@@ -53,17 +54,23 @@ class BytecodeCompiler(ast.NodeVisitor):
             if self.has_main:
                 raise Exception("Multiple 'main' functions are not allowed.")
             self.has_main = True
+
             for stmt in node.body:
                 self.visit(stmt)
+        else:
+            # 関数は使えないので、エラーを出す
+            raise NotImplementedError(f"Function '{node.name}' is not supported.")
 
     def visit_Return(self, node):
         if node.value is None:
             # 何もなければ0をプッシュして終了
             self.code.extend([OP_PUSHB, 0])
         else:
+            # 返り値を評価してスタックに積む
             self.visit(node.value)
-            # 今はとりあえずHALTで終了するようにしておく
-            self.code.append(OP_HALT)
+
+        # mainしかないのでreturnされたら終了
+        self.code.append(OP_HALT)
 
     def visit_Constant(self, node):
         val = int(node.value)
@@ -316,7 +323,6 @@ class BytecodeCompiler(ast.NodeVisitor):
             pass  # 単項プラスは何もしない
         else:
             raise NotImplementedError(f"Unsupported unary operator: {type(node.op)}")
-
 
 # 使用例
 arg_parser = argparse.ArgumentParser(description="Compile Python code to stack-machine bytecode.")
