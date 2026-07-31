@@ -115,6 +115,24 @@ class BytecodeCompiler(ast.NodeVisitor):
         # VM[<address>] にポップ
         self.code.append(OP_POPA)
 
+    # 単項演算子
+    def visit_UnaryOp(self, node):
+        # 右辺を先に評価 (スタックに積まれる)
+        self.visit(node.operand)
+
+        # 演算子に応じたバイトコードを付与
+        if isinstance(node.op, ast.USub):
+            self.code.extend([OP_PUSHB, 0, OP_SUB])  # 0 - operand
+        elif isinstance(node.op, ast.Invert):
+            self.code.extend([OP_PUSHW, 0xFF, 0xFF, OP_XOR])  # ビット反転 (XOR 0xFF)
+        elif isinstance(node.op, ast.Not):
+            self.code.extend(OP_NOT)  # 論理否定 (0なら1、0以外なら0)
+        elif isinstance(node.op, ast.UAdd):
+            pass  # 単項プラスは何もしない
+        else:
+            raise NotImplementedError(f"Unsupported unary operator: {type(node.op)}")
+
+    # ニ項演算子
     def visit_BinOp(self, node):
         # 右辺を先に評価 (スタックに積まれる)
         self.visit(node.right)
@@ -189,6 +207,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         
         self.code.extend([OP_CMP, cmp_subcode])
 
+    # if 文の処理
     def visit_If(self, node):
         # 条件式の評価
         self.visit(node.test)
@@ -219,6 +238,7 @@ class BytecodeCompiler(ast.NodeVisitor):
             # 脱出用 JMP のアドレスをパッチ
             self.code[exit_jump_pos + 1] = len(self.code)
 
+    # 真偽値の論理演算 (and/or) の処理
     def visit_BoolOp(self, node):
         # 複数の比較が含まれている場合は、and/or のツリーに変換して再帰的に処理する
         if isinstance(node.op, ast.And):
@@ -319,22 +339,6 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code.append(OP_SWP)  # [対象値, 評価1, 評価2, 複製]
             self.code.append(OP_DEL)  # [対象値, 評価1, 評価2]
             self.code.append(OP_OR)  # [対象値, OR結果]
-
-    def visit_UnaryOp(self, node):
-        # 右辺を先に評価 (スタックに積まれる)
-        self.visit(node.operand)
-
-        # 演算子に応じたバイトコードを付与
-        if isinstance(node.op, ast.USub):
-            self.code.extend([OP_PUSHB, 0, OP_SUB])  # 0 - operand
-        elif isinstance(node.op, ast.Invert):
-            self.code.extend([OP_PUSHW, 0xFF, 0xFF, OP_XOR])  # ビット反転 (XOR 0xFF)
-        elif isinstance(node.op, ast.Not):
-            self.code.extend(OP_NOT)  # 論理否定 (0なら1、0以外なら0)
-        elif isinstance(node.op, ast.UAdd):
-            pass  # 単項プラスは何もしない
-        else:
-            raise NotImplementedError(f"Unsupported unary operator: {type(node.op)}")
 
     def visit_While(self, node):
         # while 文の開始位置を記録
