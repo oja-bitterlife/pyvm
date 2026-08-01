@@ -1,10 +1,9 @@
 import inspect
-from platform import node
-
-from assets.vm import *
 import argparse
 import ast
 
+# メモリ用定数
+from assets.vm import *
 MEMORY_ARRAY = "VM"  # メモリ配列の名前
 
 # 定数定義
@@ -43,12 +42,30 @@ CMP_GE      = 0x05
 ADDR_ERROR  = 0xFF
 
 
+from functools import wraps
+
+
+# ヘルパー
+# *****************************************************************************
+def need_main(func):
+    @wraps(func)
+    def wrapper(self, node):
+        # mainの外であれば、コード生成をせずに単に子ノードを辿るだけにする
+        if not self.has_main:
+            return super(type(self), self).generic_visit(node)
+        return func(self, node)
+    return wrapper
+
+
 # コンパイラ実装
 # *****************************************************************************
 class BytecodeCompiler(ast.NodeVisitor):
-    def __init__(self):
+    def __init__(self, source_code):
         self.code = bytearray()
         self.has_main = False
+
+        self.visit(ast.parse(source_code))
+        self.code.append(OP_HALT)
 
     # デフォルト動作
     # *****************************************************************************
@@ -93,10 +110,10 @@ class BytecodeCompiler(ast.NodeVisitor):
         else:
             self.code.extend([OP_PUSHW, val & 0xFF, (val >> 8) & 0xFF])
 
+    @need_main
     def visit_Name(self, node):
-        # globalsに無い変数は使ってはいけない
+        # mainの中では新たに変数を作れない
         if node.id not in globals():
-            # 変数は使えないので、エラーを出す
             raise NotImplementedError(f"Variable '{node.id}' is not supported.")
 
         val = globals().get(node.id)
@@ -121,6 +138,19 @@ class BytecodeCompiler(ast.NodeVisitor):
     # *****************************************************************************
     # 代入文: VM[<address>] = value
     def visit_Assign(self, node):
+        # mainの外であればglobals()の変数に代入する
+        if not self.has_main:
+            if len(node.targets) != 1:
+                raise NotImplementedError("Only single assignment is supported.")
+            if not isinstance(node.targets[0], ast.Name):
+                raise NotImplementedError("Only assignment to a variable is supported.")
+
+            # 右辺の値を評価
+            val = eval(compile(ast.Expression(node.value), filename="<ast>", mode="eval"))
+            globals()[node.targets[0].id] = val
+            return
+
+        # mainの中であれば、左辺はVM[<address>]でなければならない(変数は作れない)
         if not isinstance(node.targets[0], ast.Subscript) or not isinstance(node.targets[0].value, ast.Name) or node.targets[0].value.id != MEMORY_ARRAY:
             raise NotImplementedError(f"Only assignment to {MEMORY_ARRAY}[] is supported.")
 
@@ -143,7 +173,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         elif isinstance(node.op, ast.Invert):
             self.code.extend([OP_PUSHW, 0xFF, 0xFF, OP_XOR])  # ビット反転 (XOR 0xFF)
         elif isinstance(node.op, ast.Not):
-            self.code.extend(OP_NOT)  # 論理否定 (0なら1、0以外なら0)
+            self.code.append(OP_NOT)  # 論理否定 (0なら1、0以外なら0)
         elif isinstance(node.op, ast.UAdd):
             pass  # 単項プラスは何もしない
         else:
@@ -430,17 +460,22 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.code.append(OP_DEL)
 
 
+    # モジュール呼び出し用
+    # *****************************************************************************
+    def get_bytecode(self):
+        return self.code
+
+    def print_bytecode(self, separator=" "):
+        print(separator.join(f"{byte:02X}" for byte in self.code))
+
+
 # コマンドライン
 # *****************************************************************************
+# ファイル名入力
 arg_parser = argparse.ArgumentParser(description="Compile Python code to stack-machine bytecode.")
 arg_parser.add_argument("input_file", help="Path to the input Python file.")
 args = arg_parser.parse_args()
 
 with open(args.input_file, "r") as f:
-    tree = ast.parse(f.read())
-    compiler = BytecodeCompiler()
-    compiler.visit(tree)
-    compiler.code.append(OP_HALT)
-
-binary_data = bytes(compiler.code)
-print(" ".join(f"{byte:02X}" for byte in binary_data))
+    bc = BytecodeCompiler(f.read())
+    bc.print_bytecode()
