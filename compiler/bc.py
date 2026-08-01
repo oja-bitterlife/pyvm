@@ -4,7 +4,7 @@ import ast
 from functools import wraps
 
 # メモリ用定数
-from compiler.vm import *
+# from compiler.vm import *
 MEMORY_ARRAY = "VM"  # メモリ配列の名前
 
 # 定数定義
@@ -62,6 +62,10 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.code = bytearray()
         self.has_main = False
 
+        self.global_ns = {}
+        exec(source_code, self.global_ns)  # 変数定義を実行してグローバル変数に反映
+        globals().update(self.global_ns)
+
         self.visit(ast.parse(source_code))
         self.code.append(OP_HALT)
 
@@ -101,6 +105,7 @@ class BytecodeCompiler(ast.NodeVisitor):
 
     # 定数・変数
     # *****************************************************************************
+    @need_main
     def visit_Constant(self, node):
         val = int(node.value)
         if(val & 0xFF00) == 0:
@@ -121,6 +126,7 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code.extend([OP_PUSHW, val & 0xFF, (val >> 8) & 0xFF])
 
     # VM[index] の値をロードしてスタックに積む
+    @need_main
     def visit_Subscript(self, node):
         if not isinstance(node.value, ast.Name) or node.value.id != MEMORY_ARRAY:
             raise NotImplementedError(f"Only {MEMORY_ARRAY}[] subscript is supported.")
@@ -135,19 +141,8 @@ class BytecodeCompiler(ast.NodeVisitor):
     # 演算子
     # *****************************************************************************
     # 代入文: VM[<address>] = value
+    @need_main
     def visit_Assign(self, node):
-        # mainの外であればglobals()の変数に代入する
-        if not self.has_main:
-            if len(node.targets) != 1:
-                raise NotImplementedError("Only single assignment is supported.")
-            if not isinstance(node.targets[0], ast.Name):
-                raise NotImplementedError("Only assignment to a variable is supported.")
-
-            # 右辺の値を評価
-            val = eval(compile(ast.Expression(node.value), filename="<ast>", mode="eval"))
-            globals()[node.targets[0].id] = val
-            return
-
         # mainの中であれば、左辺はVM[<address>]でなければならない(変数は作れない)
         if not isinstance(node.targets[0], ast.Subscript) or not isinstance(node.targets[0].value, ast.Name) or node.targets[0].value.id != MEMORY_ARRAY:
             raise NotImplementedError(f"Only assignment to {MEMORY_ARRAY}[] is supported.")
@@ -161,6 +156,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.code.append(OP_POPA)
 
     # 単項演算子
+    @need_main
     def visit_UnaryOp(self, node):
         # 右辺を先に評価 (スタックに積まれる)
         self.visit(node.operand)
@@ -178,6 +174,7 @@ class BytecodeCompiler(ast.NodeVisitor):
             raise NotImplementedError(f"Unsupported unary operator: {type(node.op)}")
 
     # ニ項演算子
+    @need_main
     def visit_BinOp(self, node):
         # 右辺を先に評価 (スタックに積まれる)
         self.visit(node.right)
@@ -206,6 +203,7 @@ class BytecodeCompiler(ast.NodeVisitor):
             raise NotImplementedError(f"Unsupported binary operator: {type(node.op)}")
 
     # 複合代入演算子 (例: a += 1) を、単純な代入 (a = a + 1) に変換して処理する
+    @need_main
     def visit_AugAssign(self, node):
         # binOpに変換する
         bin_op = ast.BinOp(left=node.target, op=node.op, right=node.value)
@@ -213,6 +211,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.visit(assign)
 
     # 論理演算子 (and/or)
+    @need_main
     def visit_BoolOp(self, node):
         # 複数の比較が含まれている場合は、and/or のツリーに変換して再帰的に処理する
         if isinstance(node.op, ast.And):
@@ -239,6 +238,7 @@ class BytecodeCompiler(ast.NodeVisitor):
     # 比較
     # *****************************************************************************
     # 複数の比較（例: a < b < c）を、(a < b) and (b < c) の ast.BoolOp に分解するヘルパー
+    @need_main
     def desugar_compare(self, node):
         if len(node.ops) == 1:
             return node  # 1つだけならそのまま返す
@@ -257,6 +257,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         # これを ast.And でつないだ BoolOp にする
         return ast.BoolOp(op=ast.And(), values=comparisons)
 
+    @need_main
     def visit_Compare(self, node):
         # 複数比較が含まれている場合は、and のツリーに変換して再帰的に処理する
         if len(node.ops) > 1:
@@ -282,6 +283,7 @@ class BytecodeCompiler(ast.NodeVisitor):
     # 条件分岐
     # *****************************************************************************
     # if 文の処理
+    @need_main
     def visit_If(self, node):
         # 条件式の評価
         self.visit(node.test)
@@ -313,6 +315,7 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code[exit_jump_pos + 1] = len(self.code)
 
     # match 文の処理
+    @need_main
     def visit_Match(self, node):
         # match 文の対象となる値を評価してスタックに積む
         self.visit(node.subject)
@@ -350,6 +353,7 @@ class BytecodeCompiler(ast.NodeVisitor):
 
         self.code.append(OP_DEL)  # スタックから対象値をポップして破棄
 
+    @need_main
     def visit_MatchValue(self, node):
         # スタックトップの値を複製して積む (対象値を保持するため)
         self.code.append(OP_DUP)
@@ -360,6 +364,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         # スタックから [対象値, パターン値] をポップして比較し、結果をスタックに積む
         self.code.extend([OP_CMP, CMP_EQ])
 
+    @need_main
     def visit_MatchAs(self, node):
         # スタックトップの値を複製して積む (対象値を保持するため)
         self.code.append(OP_DUP)
@@ -379,6 +384,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         # スタックから [対象値, パターン値] をポップして比較し、結果をスタックに積む
         self.code.extend([OP_CMP, CMP_EQ])
 
+    @need_main
     def visit_MatchOr(self, node):
         # 最初のパターンを評価してスタックに積む
         self.visit(node.patterns[0])  # [対象値, 評価1]
@@ -394,6 +400,7 @@ class BytecodeCompiler(ast.NodeVisitor):
 
     # ループ
     # *****************************************************************************
+    @need_main
     def visit_While(self, node):
         # while 文の開始位置を記録
         loop_start_pos = len(self.code)
@@ -416,6 +423,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.code[exit_jump_pos + 1] = len(self.code)
 
     # forは展開
+    @need_main
     def visit_For(self, node):
         # 引数はリストかタプルであることを確認
         if not isinstance(node.iter, (ast.List, ast.Tuple)):
