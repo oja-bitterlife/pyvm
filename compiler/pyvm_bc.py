@@ -424,7 +424,6 @@ class BytecodeCompiler(ast.NodeVisitor):
         # 偽だった場合のジャンプ先をパッチ
         self.code[exit_jump_pos + 1] = len(self.code)
 
-    # forは展開
     @need_main
     def visit_For(self, node):
         # 引数はリストかタプルであることを確認
