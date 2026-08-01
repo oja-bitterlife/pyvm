@@ -214,7 +214,7 @@ public struct swiftVMLib {
         let addr = self.stack.pop()
         self.stack.push(value: self.mem[Int(addr)])
         #if !EMBEDDED
-            self.op_trace("PUSHA \(self.mem[Int(addr)]) in VM[\(Int(addr))]")
+            self.op_trace("PUSHA \(self.mem[Int(addr)]) from VM[\(Int(addr))]")
         #endif
     }
     @inline(__always)

@@ -52,17 +52,17 @@ $ task run
 7: PUSHB 2
 9: POPA VM[2] <= 2
 10: PUSHB 1
-12: PUSHA 17 in VM[1]
+12: PUSHA 17 from VM[1]
 13: PUSHB 19
 15: CMP 17 == 19 => 0
 17: PUSHB 1
-19: PUSHA 17 in VM[1]
+19: PUSHA 17 from VM[1]
 20: PUSHB 17
 22: CMP 17 == 17 => 1
 24: OR 1 | 0 => 1
 25: JZ 1: pass
 27: PUSHB 2
-29: PUSHA 2 in VM[2]
+29: PUSHA 2 from VM[2]
 30: DUP 2
 31: PUSHB 0
 33: CMP 2 == 0 => 0
