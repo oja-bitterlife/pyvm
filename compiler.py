@@ -393,17 +393,41 @@ class BytecodeCompiler(ast.NodeVisitor):
         if not isinstance(node.iter, (ast.List, ast.Tuple)):
             raise NotImplementedError("Only for loops over lists or tuples are supported.")
 
-        # リストを順に処理
+        # リストを一旦スタックに入れる
         for val in reversed(node.iter.elts):
-            assign = ast.Assign(
-                targets=[node.target], 
-                value=val
-            )
-            self.visit(assign)
+            self.visit(val)
+        self.code.extend([OP_PUSHB, len(node.iter.elts)])  # リストの長さをスタックに積む
 
-            # forの本体を展開
-            for stmt in node.body:
-                self.visit(stmt)
+        # ループの開始位置を記録
+        loop_start_pos = len(self.code)
+
+        # スタックトップの長さを複製
+        self.code.append(OP_DUP)
+
+        # ループ終了のジャンプ先を記録
+        exit_jump_pos = len(self.code)
+        self.code.extend([OP_JZ, ADDR_ERROR])  # 仮のジャンプ先をセット
+
+        # 最初の要素を取り出して変数に代入
+        self.code.append(OP_SWP)  # 最初の要素をスタックトップに移動
+        self.visit(node.target.slice)  # addressをスタックに
+        self.code.append(OP_POPA)  # VM[<address>] にポップ
+
+        # forの本体を展開
+        for stmt in node.body:
+            self.visit(stmt)
+
+        # リストの長さを１つ減らす
+        self.code.extend([OP_PUSHB, 1, OP_SWP, OP_SUB])
+
+        # ループの先頭に戻るJMP
+        self.code.extend([OP_JMP, loop_start_pos])
+
+        # 偽だった場合のジャンプ先をパッチ
+        self.code[exit_jump_pos + 1] = len(self.code)
+
+        # for文の最後に、スタックに残っているリストの長さを破棄する
+        self.code.append(OP_DEL)
 
 
 # コマンドライン
