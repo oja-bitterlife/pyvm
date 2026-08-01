@@ -1,9 +1,10 @@
-import inspect
 import argparse
 import ast
 
+from functools import wraps
+
 # メモリ用定数
-from assets.vm import *
+from compiler.vm import *
 MEMORY_ARRAY = "VM"  # メモリ配列の名前
 
 # 定数定義
@@ -40,9 +41,6 @@ CMP_GT      = 0x04
 CMP_GE      = 0x05
 
 ADDR_ERROR  = 0xFF
-
-
-from functools import wraps
 
 
 # ヘルパー
@@ -471,11 +469,12 @@ class BytecodeCompiler(ast.NodeVisitor):
 
 # コマンドライン
 # *****************************************************************************
-# ファイル名入力
-arg_parser = argparse.ArgumentParser(description="Compile Python code to stack-machine bytecode.")
-arg_parser.add_argument("input_file", help="Path to the input Python file.")
-args = arg_parser.parse_args()
+if __name__ == "__main__":
+    # ファイル名入力
+    arg_parser = argparse.ArgumentParser(description="Compile Python code to stack-machine bytecode.")
+    arg_parser.add_argument("input_file", help="Path to the input Python file.")
+    args = arg_parser.parse_args()
 
-with open(args.input_file, "r") as f:
-    bc = BytecodeCompiler(f.read())
-    bc.print_bytecode()
+    with open(args.input_file, "r") as f:
+        bc = BytecodeCompiler(f.read())
+        bc.print_bytecode()
