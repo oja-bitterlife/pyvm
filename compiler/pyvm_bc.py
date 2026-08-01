@@ -85,6 +85,10 @@ class BytecodeCompiler(ast.NodeVisitor):
 
             for stmt in node.body:
                 self.visit(stmt)
+
+            # メイン終了時rerunがない場合は0を返す
+            self.code.extend([OP_PUSHB, 0])
+
         else:
             # 関数は使えないので、エラーを出す
             raise NotImplementedError(f"Function '{node.name}' is not supported.")
