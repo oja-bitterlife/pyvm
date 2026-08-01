@@ -1,4 +1,4 @@
-from compiler.bc import BytecodeCompiler
+from compiler.pyvm_bc import BytecodeCompiler
 import argparse
 
 # コマンドライン

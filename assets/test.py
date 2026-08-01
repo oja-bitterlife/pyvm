@@ -1,4 +1,4 @@
-from compiler.vm import *
+from assets.vm import *
 
 test = {
     "VM_TEST": VM_FREE+1,
