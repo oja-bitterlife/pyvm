@@ -1,11 +1,9 @@
 import argparse
 import ast
 
-from functools import wraps
-
 # メモリ用定数
-# from compiler.vm import *
 MEMORY_ARRAY = "VM"  # メモリ配列の名前
+ADDR_ERROR  = 0xFF
 
 # 定数定義
 # *****************************************************************************
@@ -40,11 +38,10 @@ CMP_LE      = 0x03
 CMP_GT      = 0x04
 CMP_GE      = 0x05
 
-ADDR_ERROR  = 0xFF
-
 
 # ヘルパー
 # *****************************************************************************
+from functools import wraps
 def need_main(func):
     @wraps(func)
     def wrapper(self, node):
