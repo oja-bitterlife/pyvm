@@ -159,12 +159,11 @@ class BytecodeCompiler(ast.NodeVisitor):
         if not left_is_VM:
             raise NotImplementedError(f"Only assignment to {MEMORY_ARRAY}[] is supported.")
 
-        # 右辺の値を先に評価 (スタックに積まれる)
+        # 値を先に評価 (スタックに積まれる)
         self.visit(node.value)
-        # 左辺のaddressを後から評価 (スタックに積まれる)
-        self.visit(node.targets[0].slice)
 
-        # VM[<address>] にポップ
+        # POPA用のaddressを直前で評価し、先に積んだ値をVM[<address>]にポップ
+        self.visit(node.targets[0].slice)
         self.code.append(OP_POPA)
 
     # 単項演算子
