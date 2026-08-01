@@ -428,13 +428,24 @@ class BytecodeCompiler(ast.NodeVisitor):
     @need_main
     def visit_For(self, node):
         # 引数はリストかタプルであることを確認
-        if not isinstance(node.iter, (ast.List, ast.Tuple)):
+        if isinstance(node.iter, (ast.List, ast.Tuple)):
+            items = node.iter.elts
+        # グローバル変数がリストかタプルである場合はOK
+        elif isinstance(node.iter, ast.Name) and node.iter.id in globals() and isinstance(globals()[node.iter.id], (list, tuple)):
+            items = globals()[node.iter.id]
+        else:
             raise NotImplementedError("Only for loops over lists or tuples are supported.")
 
         # リストを一旦スタックに入れる
-        for val in reversed(node.iter.elts):
-            self.visit(val)
-        self.code.extend([OP_PUSHB, len(node.iter.elts)])  # リストの長さをスタックに積む
+        for val in reversed(items):
+            if isinstance(val, int):
+                if(val & 0xFF00) == 0:
+                    self.code.extend([OP_PUSHB, val & 0xFF])
+                else:
+                    self.code.extend([OP_PUSHW, val & 0xFF, (val >> 8) & 0xFF])
+            else:
+                raise NotImplementedError("Only integer values in lists or tuples are supported.")
+        self.code.extend([OP_PUSHB, len(items)])  # リストの長さをスタックに積む
 
         # ループの開始位置を記録
         loop_start_pos = len(self.code)
