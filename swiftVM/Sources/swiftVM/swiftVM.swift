@@ -3,7 +3,7 @@
 import Foundation
 import swiftVMLib
 
-let filePath = "../assets/test.bin"
+let filePath = "assets/test.bin"
 
 @main
 struct swiftVM {

@@ -1,0 +1,26 @@
+# taskfile-go
+version: '3'
+tasks:
+  data_ck:
+    desc: Check the Python Script
+    cmds:
+      - python compiler/pyvm_bc.py assets/test.py
+
+  data_mk:
+    desc: Make Data
+    cmds:
+      - python compiler/pyvm_bc.py assets/test.py | xxd -r -p > assets/test.bin
+
+  run:
+    desc: Run the Python Script
+    cmds:
+      - swift run --package-path swiftVM
+
+  build:
+    desc: Build the Swift VM
+    cmds:
+      - swift build --package-path swiftVM
+
+  default:
+    cmds:
+      - task --list
