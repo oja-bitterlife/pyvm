@@ -118,4 +118,5 @@ Pythonスクリプトでは、関数や例外は使用できません。
 
 mainの中では変数定義ができません。VM(実機メモリ)を使ってください。
 
-for文は `for VM[???] in [list or tuple]` の形式のみ使えます。
+for文は `for VM[???] in [list or tuple]` の形式のみ使えます。iter部分は`list or tuple`であれば変数でもOK。
+
