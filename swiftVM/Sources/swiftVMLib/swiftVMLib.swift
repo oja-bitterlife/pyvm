@@ -131,7 +131,10 @@ public struct swiftVMLib {
 
     public mutating func step() -> Bool {
         // エラーアドレスの場合はエラー終了
-        if self.pc == ADDR_ERROR {
+        if self.pc >= ADDR_ERROR {
+            #if !EMBEDDED
+                assert(false, "Program counter out of bounds: \(self.pc)")
+            #endif
             self.stack.push(value: UInt16(0xffff))  // エラーコードをスタックに積む
             return true
         }
