@@ -177,8 +177,6 @@ public struct swiftVMLib {
             self.OR()
         case OP_XOR:
             self.XOR()
-        case OP_NOT:
-            self.NOT()
         case OP_ADD:
             self.ADD()
         case OP_SUB:
@@ -306,15 +304,6 @@ public struct swiftVMLib {
                 self.op_trace("JZ \(cond): pass")
             #endif
         }
-    }
-    @inline(__always)
-    public mutating func NOT() {
-        let value = self.stack.pop()
-        let result: UInt16 = (value == 0) ? 1 : 0
-        self.stack.push(value: result)
-        #if !EMBEDDED
-            self.op_trace("NOT \(value) => \(result)")
-        #endif
     }
 
     @inline(__always)

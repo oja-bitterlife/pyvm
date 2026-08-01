@@ -24,7 +24,6 @@ OP_CMP      = 0x20  # スタックから [左辺, 右辺] をポップして比�
 OP_AND      = 0x21
 OP_OR       = 0x22
 OP_XOR      = 0x23
-OP_NOT      = 0x24  # スタックトップの値を(0なら1、0以外なら0)に変換
 OP_ADD      = 0x30  # スタックから [左辺, 右辺] をポップし、左辺+右辺の結果をプッシュ
 OP_SUB      = 0x31
 OP_MUL      = 0x32
@@ -180,7 +179,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         elif isinstance(node.op, ast.Invert):
             self.code.extend([OP_PUSHW, 0xFF, 0xFF, OP_XOR])  # ビット反転 (XOR 0xFF)
         elif isinstance(node.op, ast.Not):
-            self.code.append(OP_NOT)  # 論理否定 (0なら1、0以外なら0)
+            self.code.extend([OP_PUSHB, 0, OP_CMP, CMP_EQ])  # 論理否定 (0なら1、0以外なら0)
         elif isinstance(node.op, ast.UAdd):
             pass  # 単項プラスは何もしない
         else:
