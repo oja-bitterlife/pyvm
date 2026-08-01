@@ -5,6 +5,10 @@ from assets.vm import *
 import argparse
 import ast
 
+MEMORY_ARRAY = "VM"  # メモリ配列の名前
+
+# 定数定義
+# *****************************************************************************
 # スタックマシン用のオペコード
 OP_HALT     = 0x00  # 終了
 OP_PUSHA    = 0x01  # スタックにVM[<address>] をプッシュ
@@ -39,16 +43,23 @@ CMP_GE      = 0x05
 ADDR_ERROR  = 0xFF
 
 
+# コンパイラ実装
+# *****************************************************************************
 class BytecodeCompiler(ast.NodeVisitor):
     def __init__(self):
         self.code = bytearray()
         self.has_main = False
 
+    # デフォルト動作
+    # *****************************************************************************
     def generic_visit(self, node):
         if self.has_main:
             raise NotImplementedError(f"Unsupported AST node: {type(node).__name__}")
         super().generic_visit(node)
 
+
+    # メイン関数
+    # *****************************************************************************
     def visit_FunctionDef(self, node):
         if node.name == "main":
             if self.has_main:
@@ -72,6 +83,9 @@ class BytecodeCompiler(ast.NodeVisitor):
         # mainしかないのでreturnされたら終了
         self.code.append(OP_HALT)
 
+
+    # 定数・変数
+    # *****************************************************************************
     def visit_Constant(self, node):
         val = int(node.value)
         if(val & 0xFF00) == 0:
@@ -93,8 +107,8 @@ class BytecodeCompiler(ast.NodeVisitor):
 
     # VM[index] の値をロードしてスタックに積む
     def visit_Subscript(self, node):
-        if not isinstance(node.value, ast.Name) or node.value.id != 'VM':
-            raise NotImplementedError("Only VM[] subscript is supported.")
+        if not isinstance(node.value, ast.Name) or node.value.id != MEMORY_ARRAY:
+            raise NotImplementedError(f"Only {MEMORY_ARRAY}[] subscript is supported.")
 
         # インデックスを評価してスタックに積む
         self.visit(node.slice)
@@ -102,10 +116,13 @@ class BytecodeCompiler(ast.NodeVisitor):
         # スタックトップのインデックスに対応するメモリ値をロード
         self.code.append(OP_PUSHA)
 
+
+    # 演算子
+    # *****************************************************************************
     # 代入文: VM[<address>] = value
     def visit_Assign(self, node):
-        if not isinstance(node.targets[0], ast.Subscript) or not isinstance(node.targets[0].value, ast.Name) or node.targets[0].value.id != 'VM':
-            raise NotImplementedError("Only assignment to VM[] is supported.")
+        if not isinstance(node.targets[0], ast.Subscript) or not isinstance(node.targets[0].value, ast.Name) or node.targets[0].value.id != MEMORY_ARRAY:
+            raise NotImplementedError(f"Only assignment to {MEMORY_ARRAY}[] is supported.")
 
         # 右辺の値を先に評価 (スタックに積まれる)
         self.visit(node.value)
@@ -160,13 +177,39 @@ class BytecodeCompiler(ast.NodeVisitor):
         else:
             raise NotImplementedError(f"Unsupported binary operator: {type(node.op)}")
 
-    # 複合代入 (例: a += 1) を、単純な代入 (a = a + 1) に変換して処理する
+    # 複合代入演算子 (例: a += 1) を、単純な代入 (a = a + 1) に変換して処理する
     def visit_AugAssign(self, node):
         # binOpに変換する
         bin_op = ast.BinOp(left=node.target, op=node.op, right=node.value)
         assign = ast.Assign(targets=[node.target], value=bin_op)
         self.visit(assign)
 
+    # 論理演算子 (and/or)
+    def visit_BoolOp(self, node):
+        # 複数の比較が含まれている場合は、and/or のツリーに変換して再帰的に処理する
+        if isinstance(node.op, ast.And):
+            # 左辺の値を評価
+            self.visit(node.values[0])
+
+            # 右辺の値を順に評価
+            for value in node.values[1:]:
+                self.visit(value)
+                self.code.append(OP_AND)
+
+        elif isinstance(node.op, ast.Or):
+            # 左辺の値を評価
+            self.visit(node.values[0])
+
+            # 右辺の値を順に評価
+            for value in node.values[1:]:
+                self.visit(value)
+                self.code.append(OP_OR)
+        else:
+            raise NotImplementedError(f"Unsupported boolean operator: {type(node.op)}")
+
+
+    # 比較
+    # *****************************************************************************
     # 複数の比較（例: a < b < c）を、(a < b) and (b < c) の ast.BoolOp に分解するヘルパー
     def desugar_compare(self, node):
         if len(node.ops) == 1:
@@ -207,6 +250,9 @@ class BytecodeCompiler(ast.NodeVisitor):
         
         self.code.extend([OP_CMP, cmp_subcode])
 
+
+    # 条件分岐
+    # *****************************************************************************
     # if 文の処理
     def visit_If(self, node):
         # 条件式の評価
@@ -238,30 +284,7 @@ class BytecodeCompiler(ast.NodeVisitor):
             # 脱出用 JMP のアドレスをパッチ
             self.code[exit_jump_pos + 1] = len(self.code)
 
-    # 真偽値の論理演算 (and/or) の処理
-    def visit_BoolOp(self, node):
-        # 複数の比較が含まれている場合は、and/or のツリーに変換して再帰的に処理する
-        if isinstance(node.op, ast.And):
-            # 左辺の値を評価
-            self.visit(node.values[0])
-
-            # 右辺の値を順に評価
-            for value in node.values[1:]:
-                self.visit(value)
-                self.code.append(OP_AND)
-
-        elif isinstance(node.op, ast.Or):
-            # 左辺の値を評価
-            self.visit(node.values[0])
-
-            # 右辺の値を順に評価
-            for value in node.values[1:]:
-                self.visit(value)
-                self.code.append(OP_OR)
-        else:
-            raise NotImplementedError(f"Unsupported boolean operator: {type(node.op)}")
-
-
+    # match 文の処理
     def visit_Match(self, node):
         # match 文の対象となる値を評価してスタックに積む
         self.visit(node.subject)
@@ -340,6 +363,9 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code.append(OP_DEL)  # [対象値, 評価1, 評価2]
             self.code.append(OP_OR)  # [対象値, OR結果]
 
+
+    # ループ
+    # *****************************************************************************
     def visit_While(self, node):
         # while 文の開始位置を記録
         loop_start_pos = len(self.code)
@@ -361,7 +387,6 @@ class BytecodeCompiler(ast.NodeVisitor):
         # 偽だった場合のジャンプ先をパッチ
         self.code[exit_jump_pos + 1] = len(self.code)
 
-
     # forは展開
     def visit_For(self, node):
         # 引数はリストかタプルであることを確認
@@ -381,7 +406,8 @@ class BytecodeCompiler(ast.NodeVisitor):
                 self.visit(stmt)
 
 
-# 使用例
+# コマンドライン
+# *****************************************************************************
 arg_parser = argparse.ArgumentParser(description="Compile Python code to stack-machine bytecode.")
 arg_parser.add_argument("input_file", help="Path to the input Python file.")
 args = arg_parser.parse_args()
