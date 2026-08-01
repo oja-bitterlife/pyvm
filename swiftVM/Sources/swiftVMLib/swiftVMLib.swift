@@ -72,6 +72,13 @@ public struct swiftVMLib {
             self.sp = 0
         }
 
+        public mutating func reset() {
+            self.sp = 0
+            #if !EMBEDDED
+                self.stackMax = 0
+            #endif
+        }
+
         public mutating func push(value: UInt16) {
             #if !EMBEDDED
                 assert(self.sp < self.size, "Stack overflow")
@@ -124,15 +131,24 @@ public struct swiftVMLib {
         self.stack = StackMemory(address: stackAddress, size: stackSize)
     }
 
+    // VMのリセット
+    public mutating func reset() {
+        self.pc = 0
+        self.stack.reset()
+    }
+
+    // VMの実行結果を取得
     public func result() -> Int {
         return Int(self.stack.peek())
     }
 
-    public func getPC() -> Int {
-        return Int(self.pc)
-    }
-
     public mutating func step() -> Bool {
+        // エラーアドレスの場合はエラー終了
+        if pc == ADDR_ERROR {
+            self.stack.push(value: UInt16(0xffff))  // エラーコードをスタックに積む
+            return true
+        }
+
         #if !EMBEDDED
             self.op_trace("\(self.pc):", terminator: " ")
         #endif
