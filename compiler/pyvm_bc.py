@@ -143,10 +143,21 @@ class BytecodeCompiler(ast.NodeVisitor):
     # 演算子
     # *****************************************************************************
     # 代入文: VM[<address>] = value
-    @need_main
     def visit_Assign(self, node):
+        # 左辺がVM[<address>]であることを確認
+        left_is_VM = isinstance(node.targets[0], ast.Subscript) and isinstance(node.targets[0].value, ast.Name) and node.targets[0].value.id == MEMORY_ARRAY
+
+        # mainの外であれば、コード生成をせずに単に子ノードを辿るだけにする
+        if not self.has_main:
+            # VMに値を入れてはいけない(VMは実機メモリなのでPythonでは入らない)
+            if left_is_VM:
+                raise NotImplementedError(f"Assignment to {MEMORY_ARRAY}[] is not supported outside of main.")
+
+            # 代入先がVMでなければ、generic_visitに任せる
+            return super(type(self), self).generic_visit(node)
+
         # mainの中であれば、左辺はVM[<address>]でなければならない(変数は作れない)
-        if not isinstance(node.targets[0], ast.Subscript) or not isinstance(node.targets[0].value, ast.Name) or node.targets[0].value.id != MEMORY_ARRAY:
+        if not left_is_VM:
             raise NotImplementedError(f"Only assignment to {MEMORY_ARRAY}[] is supported.")
 
         # 右辺の値を先に評価 (スタックに積まれる)
