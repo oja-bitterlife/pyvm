@@ -170,12 +170,12 @@ class BytecodeCompiler(ast.NodeVisitor):
     # 単項演算子
     @need_main
     def visit_UnaryOp(self, node):
-        # 右辺を先に評価 (スタックに積まれる)
+        # 値を先に評価 (スタックに積まれる)
         self.visit(node.operand)
 
         # 演算子に応じたバイトコードを付与
         if isinstance(node.op, ast.USub):
-            self.code.extend([OP_PUSHB, 0, OP_SUB])  # 0 - operand
+            self.code.extend([OP_PUSHB, 0, OP_SWP, OP_SUB])  # 0 - operand
         elif isinstance(node.op, ast.Invert):
             self.code.extend([OP_PUSHW, 0xFF, 0xFF, OP_XOR])  # ビット反転 (XOR 0xFF)
         elif isinstance(node.op, ast.Not):
@@ -188,10 +188,10 @@ class BytecodeCompiler(ast.NodeVisitor):
     # ニ項演算子
     @need_main
     def visit_BinOp(self, node):
-        # 右辺を先に評価 (スタックに積まれる)
-        self.visit(node.right)
-        # 左辺を後から評価 (スタックに積まれる)
+        # 左辺を先に評価 (スタックに積まれる)
         self.visit(node.left)
+        # 右辺を後から評価 (スタックに積まれる)
+        self.visit(node.right)
 
         # 演算子に応じたバイトコードを付与
         # （VM側でスタックから [左辺, 右辺] をポップして計算し、結果をプッシュする）

@@ -341,8 +341,8 @@ public struct swiftVMLib {
 
     @inline(__always)
     public mutating func AND() {
-        let left = self.stack.pop()
         let right = self.stack.pop()
+        let left = self.stack.pop()
         let result = left & right
         self.stack.push(value: result)
         #if !EMBEDDED
@@ -351,8 +351,8 @@ public struct swiftVMLib {
     }
     @inline(__always)
     public mutating func OR() {
-        let left = self.stack.pop()
         let right = self.stack.pop()
+        let left = self.stack.pop()
         let result = left | right
         self.stack.push(value: result)
         #if !EMBEDDED
@@ -361,8 +361,8 @@ public struct swiftVMLib {
     }
     @inline(__always)
     public mutating func XOR() {
-        let left = self.stack.pop()
         let right = self.stack.pop()
+        let left = self.stack.pop()
         let result = left ^ right
         self.stack.push(value: result)
         #if !EMBEDDED
@@ -372,8 +372,8 @@ public struct swiftVMLib {
 
     @inline(__always)
     public mutating func ADD() {
-        let left = self.stack.pop()
         let right = self.stack.pop()
+        let left = self.stack.pop()
         let result = left &+ right
         self.stack.push(value: result)
         #if !EMBEDDED
@@ -382,8 +382,8 @@ public struct swiftVMLib {
     }
     @inline(__always)
     public mutating func SUB() {
-        let left = self.stack.pop()
         let right = self.stack.pop()
+        let left = self.stack.pop()
         let result = left &- right
         self.stack.push(value: result)
         #if !EMBEDDED
@@ -392,8 +392,8 @@ public struct swiftVMLib {
     }
     @inline(__always)
     public mutating func MUL() {
-        let left = self.stack.pop()
         let right = self.stack.pop()
+        let left = self.stack.pop()
         let result = left &* right
         self.stack.push(value: result)
         #if !EMBEDDED
@@ -402,8 +402,8 @@ public struct swiftVMLib {
     }
     @inline(__always)
     public mutating func DIV() {
-        let left = self.stack.pop()
         let right = self.stack.pop()
+        let left = self.stack.pop()
         #if !EMBEDDED
             assert(right != 0, "Division by zero")
         #endif
@@ -415,8 +415,8 @@ public struct swiftVMLib {
     }
     @inline(__always)
     public mutating func MOD() {
-        let left = self.stack.pop()
         let right = self.stack.pop()
+        let left = self.stack.pop()
         #if !EMBEDDED
             assert(right != 0, "Modulo by zero")
         #endif
