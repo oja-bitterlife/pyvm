@@ -280,14 +280,14 @@ public struct swiftVMLib {
 
     @inline(__always)
     public mutating func JMP() {
-        self.pc = Int(self.code[self.pc] | (self.code[self.pc + 1] << 8))
+        self.pc = Int(self.code[self.pc]) | (Int(self.code[self.pc + 1]) << 8)
         #if !EMBEDDED
             self.op_trace("JMP to \(self.pc)")
         #endif
     }
     @inline(__always)
     public mutating func JZ() {
-        let addr = self.code[self.pc] | (self.code[self.pc + 1] << 8)
+        let addr = Int(self.code[self.pc]) | (Int(self.code[self.pc + 1]) << 8)
         self.pc += 2
         // 条件値はスタックからポップして判定
         let cond = self.stack.pop()
