@@ -4,7 +4,9 @@ import os
 
 # メモリ用定数
 MEMORY_ARRAY = "VM"  # メモリ配列の名前
-ADDR_ERROR  = 0xFF
+ADDR_ERROR_L  = 0xFF
+ADDR_ERROR_H  = 0xFF
+ADDR_ERROR  = (ADDR_ERROR_L, ADDR_ERROR_H<<8)  # エラー時のジャンプ先アドレス (0xFFFF)
 
 # 定数定義
 # *****************************************************************************
@@ -301,7 +303,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         
         # 偽だった場合にジャンプする場所
         else_jump_pos = len(self.code)
-        self.code.extend([OP_JZ, ADDR_ERROR])  # 仮のジャンプ先をセット
+        self.code.extend([OP_JZ, ADDR_ERROR_L, ADDR_ERROR_H])  # 仮のジャンプ先をセット
         
         # 条件が真のときの本体 (body)
         for stmt in node.body:
@@ -310,10 +312,11 @@ class BytecodeCompiler(ast.NodeVisitor):
         # else部分を飛ばすJMP
         if node.orelse:
             exit_jump_pos = len(self.code)
-            self.code.extend([OP_JMP, ADDR_ERROR])  # 仮のジャンプ先をセット
+            self.code.extend([OP_JMP, ADDR_ERROR_L, ADDR_ERROR_H])  # 仮のジャンプ先をセット
         
         # else/elif が始まる場所をパッチ
-        self.code[else_jump_pos + 1] = len(self.code)
+        self.code[else_jump_pos + 1] = len(self.code)&0xFF
+        self.code[else_jump_pos + 2] = (len(self.code)>>8)&0xFF
         
         if node.orelse:
             if len(node.orelse) == 1 and isinstance(node.orelse[0], ast.If):
@@ -323,7 +326,8 @@ class BytecodeCompiler(ast.NodeVisitor):
                     self.visit(stmt)
                     
             # 脱出用 JMP のアドレスをパッチ
-            self.code[exit_jump_pos + 1] = len(self.code)
+            self.code[exit_jump_pos + 1] = len(self.code)&0xFF
+            self.code[exit_jump_pos + 2] = (len(self.code)>>8)&0xFF
 
     # match 文の処理
     @need_main
@@ -346,7 +350,7 @@ class BytecodeCompiler(ast.NodeVisitor):
 
             # 比較結果が 0 (False) なら次の case にジャンプする
             next_case_jump_pos = len(self.code)
-            self.code.extend([OP_JZ, ADDR_ERROR])  # 仮のジャンプ先をセット
+            self.code.extend([OP_JZ, ADDR_ERROR_L, ADDR_ERROR_H])  # 仮のジャンプ先をセット
 
             # case の本体を評価
             for stmt in case.body:
@@ -354,13 +358,15 @@ class BytecodeCompiler(ast.NodeVisitor):
 
             # case の本体が終わったらbreak 用のジャンプを追加
             break_jumps.append(len(self.code))
-            self.code.extend([OP_JMP, ADDR_ERROR])  # 仮のジャンプ先をセット
+            self.code.extend([OP_JMP, ADDR_ERROR_L, ADDR_ERROR_H])  # 仮のジャンプ先をセット
 
-            self.code[next_case_jump_pos + 1] = len(self.code)
+            self.code[next_case_jump_pos + 1] = len(self.code)&0xFF
+            self.code[next_case_jump_pos + 2] = (len(self.code)>>8)&0xFF
 
         # case の本体が終わったら、ジャンプ先を修正する
         for pos in break_jumps:
-            self.code[pos + 1] = len(self.code)
+            self.code[pos + 1] = len(self.code)&0xFF
+            self.code[pos + 2] = (len(self.code)>>8)&0xFF
 
         self.code.append(OP_DEL)  # スタックから対象値をポップして破棄
 
@@ -421,17 +427,18 @@ class BytecodeCompiler(ast.NodeVisitor):
 
         # 偽だった場合にジャンプする場所
         exit_jump_pos = len(self.code)
-        self.code.extend([OP_JZ, ADDR_ERROR])  # 仮のジャンプ先をセット
+        self.code.extend([OP_JZ, ADDR_ERROR_L, ADDR_ERROR_H])  # 仮のジャンプ先をセット
 
         # while の本体 (body)
         for stmt in node.body:
             self.visit(stmt)
 
         # ループの先頭に戻るJMP
-        self.code.extend([OP_JMP, loop_start_pos])
+        self.code.extend([OP_JMP, loop_start_pos&0xFF, (loop_start_pos>>8)&0xFF])
 
         # 偽だった場合のジャンプ先をパッチ
-        self.code[exit_jump_pos + 1] = len(self.code)
+        self.code[exit_jump_pos + 1] = len(self.code)&0xFF
+        self.code[exit_jump_pos + 2] = (len(self.code)>>8)&0xFF
 
     @need_main
     def visit_For(self, node):
@@ -463,7 +470,7 @@ class BytecodeCompiler(ast.NodeVisitor):
 
         # ループ終了のジャンプ先を記録
         exit_jump_pos = len(self.code)
-        self.code.extend([OP_JZ, ADDR_ERROR])  # 仮のジャンプ先をセット
+        self.code.extend([OP_JZ, ADDR_ERROR_L, ADDR_ERROR_H])  # 仮のジャンプ先をセット
 
         # 最初の要素を取り出して変数に代入
         self.code.append(OP_SWP)  # 最初の要素をスタックトップに移動
@@ -478,10 +485,11 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.code.extend([OP_PUSHB, 1, OP_SWP, OP_SUB])
 
         # ループの先頭に戻るJMP
-        self.code.extend([OP_JMP, loop_start_pos])
+        self.code.extend([OP_JMP, loop_start_pos&0xFF, (loop_start_pos>>8)&0xFF])
 
         # 偽だった場合のジャンプ先をパッチ
-        self.code[exit_jump_pos + 1] = len(self.code)
+        self.code[exit_jump_pos + 1] = len(self.code)&0xFF
+        self.code[exit_jump_pos + 2] = (len(self.code)>>8)&0xFF
 
         # for文の最後に、スタックに残っているリストの長さを破棄する
         self.code.append(OP_DEL)
