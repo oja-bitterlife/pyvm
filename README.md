@@ -27,18 +27,20 @@ def main():
     if VM[VM_EVENT] == EVENT_KEY_A or VM[VM_EVENT] == EVENT_KEY_START:
         match VM[VM_SELECT_NO]:
             case 0:
-                return 0  # START
+                return 1  # START
             case 1:
-                return 1  # CONTINUE
+                return 2  # CONTINUE
             case _:
                 return -1  # INVALID SELECTION
+
+    return 0  # No Select
 ```
 
 出力
 
 ```bash
 $ task data_ck
-02 11 02 01 04 02 02 02 02 04 02 01 01 02 13 20 00 02 01 01 02 11 20 00 22 11 3C 00 02 02 01 05 02 00 20 00 11 2D 00 02 00 00 10 3B 00 05 02 01 20 00 11 3B 00 02 01 00 10 3B 00 08 02 01 02 00 07 31 00 02 00 00
+02 11 02 01 04 02 02 02 02 04 02 01 01 02 13 20 00 02 01 01 02 11 20 00 22 11 43 00 02 02 01 05 02 00 20 00 11 2D 00 02 01 00 10 42 00 05 02 01 20 00 11 3B 00 02 02 00 10 42 00 02 01 02 00 07 31 00 08 02 00 00 02 00 00
 ```
 
 実行
@@ -71,12 +73,11 @@ $ task run
 46: PUSHB 1
 48: CMP 2 == 1 => 0
 50: JZ 0: jump to 59
-59: DEL 2
-60: PUSHB 1
-62: PUSHB 0
-64: SWP [1, 0] => [0, 1]
-65: SUB 0 - 1 => 65535
-66: HALT
+59: PUSHB 1
+61: PUSHB 0
+63: SWP [1, 0] => [0, 1]
+64: SUB 0 - 1 => 65535
+65: HALT
 return: 65535
 Stack max usage: 3 / 64
 ```
