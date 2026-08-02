@@ -13,5 +13,5 @@ def main():
                 return 0  # START
             case 1:
                 return 1  # CONTINUE
-            case _:
-                return -1  # INVALID SELECTION
+
+    return -1  # INVALID SELECTION
