@@ -24,7 +24,7 @@ public struct swiftVMLib {
         public subscript(index: Int) -> UInt8 {
             get {
                 #if !EMBEDDED
-                    assert(index >= 0 && index < 256, "Code index out of range")
+                    assert(index >= 0 && index < ADDR_ERROR, "Code index out of range")
                 #endif
                 return ptr[index]
             }
@@ -135,7 +135,7 @@ public struct swiftVMLib {
             assert(self.pc < ADDR_ERROR, "Program counter out of bounds: \(self.pc)")
         #endif
         if self.pc >= ADDR_ERROR {
-            self.stack.push(value: UInt16(0xffff))  // エラーコードをスタックに積む
+            self.stack.push(value: UInt16(Int16(-1)))  // エラーコードをスタックに積む
             return true
         }
 
@@ -193,9 +193,6 @@ public struct swiftVMLib {
             #endif
         }
 
-        #if !EMBEDDED
-            assert(self.pc < 256, "Program counter out of bounds")
-        #endif
         return false
     }
 
@@ -283,15 +280,15 @@ public struct swiftVMLib {
 
     @inline(__always)
     public mutating func JMP() {
-        self.pc = Int(self.code[self.pc])
+        self.pc = Int(self.code[self.pc] | (self.code[self.pc + 1] << 8))
         #if !EMBEDDED
             self.op_trace("JMP to \(self.pc)")
         #endif
     }
     @inline(__always)
     public mutating func JZ() {
-        let addr = self.code[self.pc]
-        self.pc += 1
+        let addr = self.code[self.pc] | (self.code[self.pc + 1] << 8)
+        self.pc += 2
         // 条件値はスタックからポップして判定
         let cond = self.stack.pop()
         if cond == 0 {

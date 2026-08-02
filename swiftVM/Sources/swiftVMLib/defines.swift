@@ -1,4 +1,4 @@
-let ADDR_ERROR = 0xFF
+let ADDR_ERROR = 0xFFFF
 
 let OP_HALT = 0x00
 let OP_PUSHA = 0x01  // Push VM[<address>] onto the stack
