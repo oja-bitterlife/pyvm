@@ -59,14 +59,20 @@ def need_main(func):
 class BytecodeCompiler(ast.NodeVisitor):
     def __init__(self, source_code):
         self.code = bytearray()
-        self.has_main = False
+        self.has_main = False  # main関数の中を処理しているかどうかのフラグ
 
+        # 変数定義を実行してグローバル変数に反映
         self.global_ns = {}
-        exec(source_code, self.global_ns)  # 変数定義を実行してグローバル変数に反映
+        exec(source_code, self.global_ns)
         globals().update(self.global_ns)
 
+        # ASTを解析してバイトコードを生成
         self.visit(ast.parse(source_code))
         self.code.append(OP_HALT)
+
+        # 4byte境界にパディング
+        while len(self.code) % 4 != 0:
+            self.code.append(0x00)
 
     # デフォルト動作
     # *****************************************************************************
@@ -270,6 +276,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         # これを ast.And でつないだ BoolOp にする
         return ast.BoolOp(op=ast.And(), values=comparisons)
 
+    # 比較演算の処理
     @need_main
     def visit_Compare(self, node):
         # 複数比較が含まれている場合は、and のツリーに変換して再帰的に処理する
@@ -371,7 +378,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.code.append(OP_DEL)  # スタックから対象値をポップして破棄
 
     @need_main
-    def visit_MatchValue(self, node):
+    def visit_MatchValue(self, node):  # case <value> のパターン
         # スタックトップの値を複製して積む (対象値を保持するため)
         self.code.append(OP_DUP)
 
@@ -382,7 +389,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.code.extend([OP_CMP, CMP_EQ])
 
     @need_main
-    def visit_MatchAs(self, node):
+    def visit_MatchAs(self, node):  # case <name> のパターン
         # スタックトップの値を複製して積む (対象値を保持するため)
         self.code.append(OP_DUP)
 
@@ -402,7 +409,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.code.extend([OP_CMP, CMP_EQ])
 
     @need_main
-    def visit_MatchOr(self, node):
+    def visit_MatchOr(self, node):  # case <pattern1> | <pattern2> | ... のパターン
         # 最初のパターンを評価してスタックに積む
         self.visit(node.patterns[0])  # [対象値, 評価1]
 
@@ -417,6 +424,7 @@ class BytecodeCompiler(ast.NodeVisitor):
 
     # ループ
     # *****************************************************************************
+    # while 文の処理
     @need_main
     def visit_While(self, node):
         # while 文の開始位置を記録
@@ -440,6 +448,7 @@ class BytecodeCompiler(ast.NodeVisitor):
         self.code[exit_jump_pos + 1] = len(self.code)&0xFF
         self.code[exit_jump_pos + 2] = (len(self.code)>>8)&0xFF
 
+    # for 文の処理
     @need_main
     def visit_For(self, node):
         # 引数はリストかタプルであることを確認
