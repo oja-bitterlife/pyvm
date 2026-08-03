@@ -116,7 +116,7 @@ VM[VM_EVENT] が `EVENT_KEY_START` なので ifの中に入り、`VM[VM_SELECT_N
 
 ## 組み込み向け
 
-- `-D EMBEDDED` を付けてコンパイルしてください
+`Sources/swiftVMLib/*.swift`に、コンパイルオプション`-D EMBEDDED` を付けて組み込んでください
 
 ## 補足
 
