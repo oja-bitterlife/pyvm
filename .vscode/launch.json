@@ -19,6 +19,26 @@
             "target": "swiftVM",
             "configuration": "release",
             "preLaunchTask": "swift: Build Release swiftVM (swiftVM)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:pyvm}/swiftVMTest",
+            "name": "Debug swiftVMTestHarness (swiftVMTest)",
+            "target": "swiftVMTestHarness",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug swiftVMTestHarness (swiftVMTest)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:pyvm}/swiftVMTest",
+            "name": "Release swiftVMTestHarness (swiftVMTest)",
+            "target": "swiftVMTestHarness",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release swiftVMTestHarness (swiftVMTest)"
         }
     ]
 }

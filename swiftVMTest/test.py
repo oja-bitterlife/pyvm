@@ -20,8 +20,7 @@ def main():
 
     # ビット演算のテスト
     VM[VM_FREE] = ((VM[VM_FREE] & 2) | 3) ^ 1
-    if VM[VM_FREE] != 2:
-        VM[VM_TEST_RESULT] = 1
+    VM[VM_TEST_RESULT] = 0 if VM[VM_FREE] == 2 else 1
 
     # +,-のテスト
     VM[VM_FREE] = (VM[VM_FREE] + 2) - 1
