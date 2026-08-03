@@ -462,7 +462,10 @@ class BytecodeCompiler(ast.NodeVisitor):
 
         # リストを一旦スタックに入れる
         for val in reversed(items):
-            if isinstance(val, int):
+            if isinstance(val, ast.Constant) or isinstance(val, ast.Name):
+                self.visit(val)
+            # mainの外で定義したリストやタプルにも対応
+            elif isinstance(val, int):
                 if(val & 0xFF00) == 0:
                     self.code.extend([OP_PUSHB, val & 0xFF])
                 else:

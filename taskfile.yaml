@@ -21,6 +21,17 @@ tasks:
     cmds:
       - swift build --package-path swiftVM
 
+  test_py:
+    desc: Compile the Python test script into assets/test.bin
+    cmds:
+      - mkdir -p swiftVMTest/.build
+      - python compiler/pyvm_bc.py swiftVMTest/test.py | xxd -r -p > swiftVMTest/.build/test.bin
+
+  test_swift:
+    desc: Run the Swift test harness against .build/test.bin
+    cmds:
+      - swift run --package-path swiftVMTest
+
   default:
     cmds:
       - task --list
