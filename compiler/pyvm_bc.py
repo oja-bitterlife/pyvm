@@ -336,6 +336,35 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.code[exit_jump_pos + 1] = len(self.code)&0xFF
             self.code[exit_jump_pos + 2] = (len(self.code)>>8)&0xFF
 
+    # if式
+    @need_main
+    def visit_IfExp(self, node):
+        # 条件式の評価
+        self.visit(node.test)
+
+        # 偽だった場合にジャンプする場所
+        else_jump_pos = len(self.code)
+        self.code.extend([OP_JZ, ADDR_ERROR_L, ADDR_ERROR_H])  # 仮のジャンプ先をセット
+
+        # 条件が真のときの値を評価してスタックに積む
+        self.visit(node.body)
+
+        # else部分を飛ばすJMP
+        exit_jump_pos = len(self.code)
+        self.code.extend([OP_JMP, ADDR_ERROR_L, ADDR_ERROR_H])  # 仮のジャンプ先をセット
+
+        # elseが始まる場所をパッチ
+        self.code[else_jump_pos + 1] = len(self.code)&0xFF
+        self.code[else_jump_pos + 2] = (len(self.code)>>8)&0xFF
+
+        # 偽のときの値を評価してスタックに積む
+        self.visit(node.orelse)
+
+        # 脱出用 JMP のアドレスをパッチ
+        self.code[exit_jump_pos + 1] = len(self.code)&0xFF
+        self.code[exit_jump_pos + 2] = (len(self.code)>>8)&0xFF
+
+
     # match 文の処理
     @need_main
     def visit_Match(self, node):
@@ -494,7 +523,7 @@ class BytecodeCompiler(ast.NodeVisitor):
             self.visit(stmt)
 
         # リストの長さを１つ減らす
-        self.code.extend([OP_PUSHB, 1, OP_SWP, OP_SUB])
+        self.code.extend([OP_PUSHB, 1, OP_SUB])  # 右辺を積んでSub
 
         # ループの先頭に戻るJMP
         self.code.extend([OP_JMP, loop_start_pos&0xFF, (loop_start_pos>>8)&0xFF])

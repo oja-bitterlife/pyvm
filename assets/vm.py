@@ -9,6 +9,7 @@ ADDR_ERROR = 0xFF
 # 追加の専用レジスタを定義
 VM_EVENT = 1
 VM_SELECT_NO = 2
+VM_TEST_RESULT = 3
 
 # 以下自由に
 VM_FREE = 16
