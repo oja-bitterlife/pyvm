@@ -113,6 +113,8 @@ VM[VM_EVENT] が `EVENT_KEY_START` なので ifの中に入り、`VM[VM_SELECT_N
 	- `task run`
 - Swift VMビルド
 	- `task build`
+- テスト
+	- `task test`
 
 ## 組み込み向け
 
