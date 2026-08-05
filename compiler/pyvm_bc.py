@@ -57,7 +57,11 @@ def need_main(func):
 # コンパイラ実装
 # *****************************************************************************
 class BytecodeCompiler(ast.NodeVisitor):
-    def __init__(self, source_code):
+    def __init__(self, source_code, paths = []):
+        for path in paths:
+            if path not in sys.path:
+                sys.path.append(path)
+
         self.code = bytearray()
         self.has_main = False  # main関数の中を処理しているかどうかのフラグ
 
