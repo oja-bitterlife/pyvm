@@ -5,7 +5,7 @@ public struct WorkMemory {
 
     public init(address: UInt, size: Int) {
         self.ptr = UnsafeMutablePointer<UInt16>(bitPattern: address)!
-        self.size = size
+        self.size = size / 2  // UInt16のサイズで割る
     }
 
     public subscript(index: Int) -> UInt16 {
@@ -35,7 +35,7 @@ public struct StackMemory {
 
     public init(address: UInt, size: Int) {
         self.ptr = UnsafeMutablePointer<UInt16>(bitPattern: address)!
-        self.size = size
+        self.size = size / 2  // UInt16のサイズで割る
         self.sp = 0
     }
 
